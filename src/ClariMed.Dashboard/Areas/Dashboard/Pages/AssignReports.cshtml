@@ -1,0 +1,199 @@
+@page "/assign-reports"
+@model ClariMed.Dashboard.Areas.Dashboard.Pages.AssignReportsModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    ViewData["Title"] = "Assign Pending Reports";
+    var tokenSet = Antiforgery.GetAndStoreTokens(HttpContext);
+    var requestToken = tokenSet.RequestToken;
+}
+
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+        <h1 class="text-3xl font-black text-slate-800 tracking-tight">Assign Pending Reports</h1>
+        <p class="text-sm text-slate-500 mt-1 font-medium">Link incoming document files to patient DICOM imaging studies</p>
+    </div>
+    <a href="/dashboard" class="text-sm font-bold text-slate-500 hover:text-slate-800 bg-white border border-slate-200/60 px-4 py-2.5 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7 7-7"/>
+        </svg>
+        Back to Dashboard
+    </a>
+</div>
+
+@if (Model.UnassignedReports.Count == 0)
+{
+    <div class="bg-white rounded-2xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] py-32 text-center">
+        <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400 border border-slate-100 shadow-inner">
+            <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <h3 class="text-xl font-black text-slate-800 mb-2 tracking-tight">All caught up!</h3>
+        <p class="text-slate-500 font-medium text-sm max-w-md mx-auto px-4">
+            No pending reports waiting to be assigned.
+        </p>
+    </div>
+}
+else
+{
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ activeDocId: 0, activeDocName: '' }">
+        @foreach (var doc in Model.UnassignedReports)
+        {
+            <div class="bg-white rounded-2xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 flex flex-col justify-between hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300 gap-5 group">
+                <div>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100 shadow-sm group-hover:scale-105 transition-transform">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-black text-slate-800 truncate" title="@doc.OriginalFileName">@doc.OriginalFileName</h4>
+                            <p class="text-[11px] text-slate-500 font-bold mt-1 uppercase tracking-widest">@doc.ReceivedAt.ToString("MMM dd, yyyy HH:mm")</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs text-slate-500 font-mono break-all shadow-inner">
+                        <span class="font-bold text-slate-700 block mb-1 uppercase tracking-wider text-[10px]">Source Path</span>
+                        @doc.OriginalFilePath
+                    </div>
+                </div>
+
+                <div>
+                    <button type="button" 
+                            @@click="activeDocId = @doc.Id; activeDocName = '@Html.Raw(doc.OriginalFileName.Replace("'", "\'"))'; openSearchModal()"
+                            class="w-full bg-slate-100 text-slate-600 hover:bg-gradient-to-r hover:from-blue-600 hover:to-blue-500 hover:text-white hover:shadow-lg hover:shadow-blue-500/25 hover:ring-1 hover:ring-white/10 font-black text-xs py-3 px-4 rounded-xl transition-all text-center uppercase tracking-wide">
+                        Assign to Patient
+                    </button>
+                </div>
+            </div>
+        }
+
+        @* ── Assignment Modal ── *@
+        <div id="assign-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden transition-opacity">
+            <div class="bg-white rounded-3xl border border-slate-200/50 shadow-2xl w-full max-w-lg mx-4 overflow-hidden transform transition-all" @@click.away="closeSearchModal()">
+                <div class="px-6 py-5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Assign Document</h3>
+                        <p class="text-[11px] text-slate-500 font-bold mt-0.5 tracking-wider truncate max-w-[300px]" x-text="activeDocName"></p>
+                    </div>
+                    <button type="button" @@click="closeSearchModal()" class="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    @* Search Patients *@
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Search Patient or Accession #</label>
+                        <div class="relative">
+                            <input type="text"
+                                   id="modal-search-input"
+                                   placeholder="Type patient name, ID, or accession number..."
+                                   hx-get="/assign-reports?handler=Search"
+                                   hx-target="#modal-search-results"
+                                   hx-trigger="keyup changed delay:200ms"
+                                   class="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-700 transition-all focus:ring-4 focus:ring-blue-500/20 shadow-inner outline-none" />
+                            <div class="absolute right-4 top-4 text-slate-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Autocomplete Results *@
+                    <div id="modal-search-results" class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-lg max-h-60 overflow-y-auto hidden">
+                        @* Search results will swap here *@
+                    </div>
+
+                    @* Selected Study info *@
+                    <div id="modal-selected-badge" class="hidden p-5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-xl flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-inner">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black tracking-widest text-emerald-600 uppercase">Target Study Selected</p>
+                                <p id="modal-selected-text" class="text-sm font-bold text-slate-800 mt-0.5">Patient Name - Date</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Action Form *@
+                    <form method="post" asp-page-handler="Assign" id="modal-assign-form" class="pt-4 border-t border-slate-100">
+                        <input type="hidden" name="documentId" id="modal-form-document-id" :value="activeDocId" />
+                        <input type="hidden" name="studyId" id="modal-form-study-id" value="" />
+                        
+                        <div class="flex gap-3">
+                            <button type="button" @@click="closeSearchModal()" class="w-1/3 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs py-3 px-4 rounded-xl transition-all">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                    id="modal-submit-btn"
+                                    disabled
+                                    class="w-2/3 bg-slate-100 text-slate-400 border border-slate-200 font-bold text-xs py-3 px-4 rounded-xl cursor-not-allowed transition-all uppercase tracking-wide">
+                                Confirm Assignment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    function openSearchModal() {
+        const modal = document.getElementById('assign-modal');
+        modal.classList.remove('hidden');
+        document.getElementById('modal-search-input').focus();
+    }
+
+    function closeSearchModal() {
+        const modal = document.getElementById('assign-modal');
+        modal.classList.add('hidden');
+        document.getElementById('modal-search-input').value = "";
+        document.getElementById('modal-search-results').classList.add('hidden');
+        document.getElementById('modal-selected-badge').classList.add('hidden');
+        document.getElementById('modal-form-study-id').value = "";
+        
+        const btn = document.getElementById('modal-submit-btn');
+        btn.disabled = true;
+        btn.className = "w-2/3 bg-slate-100 text-slate-400 border border-slate-200 font-bold text-xs py-3 px-4 rounded-xl cursor-not-allowed transition-all";
+    }
+
+    function selectStudy(studyId, text) {
+        document.getElementById('modal-form-study-id').value = studyId;
+        document.getElementById('modal-selected-text').innerText = text;
+        
+        // Show badge
+        document.getElementById('modal-selected-badge').classList.remove('hidden');
+        
+        // Hide dropdown
+        document.getElementById('modal-search-results').classList.add('hidden');
+        
+        // Enable button
+        const btn = document.getElementById('modal-submit-btn');
+        btn.disabled = false;
+        btn.className = "w-2/3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-black text-xs py-3 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:-translate-y-0.5 ring-1 ring-white/10 uppercase tracking-wide cursor-pointer";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const input = document.getElementById('modal-search-input');
+        const container = document.getElementById('modal-search-results');
+        if (input && container) {
+            input.addEventListener("input", () => {
+                if (input.value.trim().length > 0) {
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            });
+        }
+    });
+</script>

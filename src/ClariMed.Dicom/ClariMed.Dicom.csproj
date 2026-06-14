@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClariMed.Data\ClariMed.Data.csproj" />
+    <ProjectReference Include="..\ClariMed.Imaging\ClariMed.Imaging.csproj" />
+    <ProjectReference Include="..\ClariMed.Printing\ClariMed.Printing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="fo-dicom" Version="5.1.2" />
+    <PackageReference Include="fo-dicom.Imaging.Desktop" Version="5.1.2" />
+    <PackageReference Include="fo-dicom.Codecs" Version="5.9.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

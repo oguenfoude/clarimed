@@ -1,0 +1,64 @@
+@page "/settings"
+@model ClariMed.Dashboard.Areas.Dashboard.Pages.SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-slate-800 tracking-tight">@Model.T("Settings")</h1>
+    <p class="text-sm text-slate-500 mt-1 font-medium">@Model.T("SettingsDesc")</p>
+</div>
+
+<div class="flex flex-col md:flex-row gap-8 items-start">
+    <!-- Left Navigation -->
+    <div class="w-full md:w-64 shrink-0 space-y-1 sticky top-6">
+        <a href="#general" class="block px-4 py-2.5 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 transition-colors">
+            General Preferences
+        </a>
+        <a href="#templates" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
+            Report Templates
+        </a>
+        <a href="#system" class="block px-4 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
+            System & Network
+        </a>
+    </div>
+
+    <!-- Right Content -->
+    <div class="flex-1 max-w-3xl">
+        <form hx-post="/settings" hx-target="#save-result" hx-swap="innerHTML">
+            
+            <div id="general" class="mb-10">
+                <h2 class="text-lg font-black text-slate-800 mb-4 tracking-tight">General Preferences</h2>
+                <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">@Model.T("LanguageLabel")</label>
+                    <p class="text-xs text-slate-500 mb-4 font-medium">Select the default interface language for the clinic portal.</p>
+                    <div class="relative">
+                        <select name="Language" class="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer appearance-none">
+                            <option value="en" selected="@(Model.Settings?.Language == "en")">English (US)</option>
+                            <option value="fr" selected="@(Model.Settings?.Language == "fr")">Français</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="templates" class="mb-10">
+                <h2 class="text-lg font-black text-slate-800 mb-4 tracking-tight">Report Templates</h2>
+                <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">@Model.T("ResumeLabel")</label>
+                    <p class="text-xs text-slate-500 mb-4 font-medium">@Model.T("ResumeDesc") This text will be embedded into the footer or cover of generated PDFs.</p>
+                    <textarea name="ResumeText" rows="6" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all resize-y">@Model.Settings?.ResumeText</textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-200/60">
+                <button type="submit" class="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 text-sm font-bold shadow-lg shadow-blue-500/25 transition-all hover:-translate-y-0.5 ring-1 ring-white/10">
+                    @Model.T("Save") Changes
+                </button>
+                <span id="save-result" class="text-sm font-bold text-emerald-600"></span>
+            </div>
+        </form>
+    </div>
+</div>

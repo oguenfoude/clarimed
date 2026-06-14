@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ClariMed.Worker-beba8e4e-f106-4c85-88f2-ff630bb97670</UserSecretsId>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FreeSpire.Doc" Version="14.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClariMed.Dicom\ClariMed.Dicom.csproj" />
+    <ProjectReference Include="..\ClariMed.Imaging\ClariMed.Imaging.csproj" />
+    <ProjectReference Include="..\ClariMed.Printing\ClariMed.Printing.csproj" />
+    <ProjectReference Include="..\ClariMed.Data\ClariMed.Data.csproj" />
+    <ProjectReference Include="..\ClariMed.Documents\ClariMed.Documents.csproj" />
+    <ProjectReference Include="..\ClariMed.Dashboard\ClariMed.Dashboard.csproj" />
+    <ProjectReference Include="..\ClariMed.VirtualPrinter\ClariMed.VirtualPrinter.csproj" />
+  </ItemGroup>
+
+</Project>

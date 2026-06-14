@@ -1,0 +1,108 @@
+@page "/patients"
+@model ClariMed.Dashboard.Areas.Dashboard.Pages.PatientsModel
+@{
+    ViewData["Title"] = "Patients";
+}
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Patients Registry</h1>
+    <p class="text-sm text-slate-500 mt-1">Search, filter, and review patient imaging studies.</p>
+</div>
+
+<!-- Global Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+    <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Studies</p>
+        <p class="text-3xl font-black text-slate-800 tracking-tight leading-none">@Model.TotalStudies</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 relative">Receiving</p>
+        <p class="text-3xl font-black text-amber-500 tracking-tight leading-none relative">@Model.Receiving</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 relative">Complete</p>
+        <p class="text-3xl font-black text-emerald-500 tracking-tight leading-none relative">@Model.Complete</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Images</p>
+        <p class="text-3xl font-black text-slate-800 tracking-tight leading-none">@Model.TotalImages</p>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="bg-white rounded-2xl border border-slate-200/60 p-5 mb-8 flex flex-wrap gap-4 items-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] sticky top-6 z-20">
+    <!-- Search Input -->
+    <div class="relative flex-1 min-w-[240px]">
+        <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 pointer-events-none">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </span>
+        <input type="text" name="search" id="pt-search" placeholder="Search Patient Name, ID or Accession..."
+               class="pl-11 pr-4 py-3 w-full bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:font-medium placeholder:text-slate-400"
+               hx-get="/patients?handler=Table"
+               hx-trigger="keyup changed delay:300ms"
+               hx-target="#patients-table"
+               hx-swap="outerHTML"
+               hx-include="#pt-search,#pt-modality,#pt-status,#pt-date" />
+    </div>
+
+    <div class="h-10 w-px bg-slate-200 hidden md:block"></div>
+
+    <!-- Modality Dropdown -->
+    <select name="modality" id="pt-modality"
+            class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+            hx-get="/patients?handler=Table"
+            hx-trigger="change"
+            hx-target="#patients-table"
+            hx-swap="outerHTML"
+            hx-include="#pt-search,#pt-modality,#pt-status,#pt-date">
+        <option value="">All Modalities</option>
+        @foreach (var m in Model.Modalities)
+        {
+            <option value="@m">@m</option>
+        }
+    </select>
+
+    <!-- Status Dropdown -->
+    <select name="status" id="pt-status"
+            class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+            hx-get="/patients?handler=Table"
+            hx-trigger="change"
+            hx-target="#patients-table"
+            hx-swap="outerHTML"
+            hx-include="#pt-search,#pt-modality,#pt-status,#pt-date">
+        <option value="">All Statuses</option>
+        <option value="Receiving">Receiving</option>
+        <option value="Complete">Complete</option>
+    </select>
+
+    <!-- Date Picker -->
+    <input type="date" name="date" id="pt-date"
+           class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+           hx-get="/patients?handler=Table"
+           hx-trigger="change"
+           hx-target="#patients-table"
+           hx-swap="outerHTML"
+           hx-include="#pt-search,#pt-modality,#pt-status,#pt-date" />
+
+    <div class="h-10 w-px bg-slate-200 hidden md:block"></div>
+
+    <!-- Clear Button -->
+    <button type="button"
+            class="px-5 py-3 text-sm font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all whitespace-nowrap focus:ring-4 focus:ring-rose-500/20"
+            onclick="document.getElementById('pt-search').value='';document.getElementById('pt-modality').value='';document.getElementById('pt-status').value='';document.getElementById('pt-date').value='';"
+            hx-get="/patients?handler=Table"
+            hx-trigger="click"
+            hx-target="#patients-table"
+            hx-swap="outerHTML">
+        Clear Filters
+    </button>
+</div>
+
+<!-- Patients Table Container -->
+<div id="patients-table">
+    <partial name="Shared/_PatientsTable" model="Model" />
+</div>

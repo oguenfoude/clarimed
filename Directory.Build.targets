@@ -1,0 +1,11 @@
+<Project>
+  <!-- Workaround for dotnet watch locking native dlls -->
+  <Target Name="RemoveLockedNativeDlls" BeforeTargets="CopyFilesToOutputDirectory">
+    <ItemGroup Condition="'$(DOTNET_WATCH)' != ''">
+      <None Remove="@(None)" Condition="$([System.String]::Copy('%(Filename)%(Extension)').ToLower()) == 'pdfium.dll'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)%(Extension)').ToLower()) == 'pdfium.dll'" />
+      <ContentWithTargetPath Remove="@(ContentWithTargetPath)" Condition="$([System.String]::Copy('%(Filename)%(Extension)').ToLower()) == 'pdfium.dll'" />
+      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)" Condition="$([System.String]::Copy('%(Filename)%(Extension)').ToLower()) == 'pdfium.dll'" />
+    </ItemGroup>
+  </Target>
+</Project>

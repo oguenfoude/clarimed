@@ -1,0 +1,27 @@
+@model List<ClariMed.Data.Models.Study>
+
+@if (Model.Count == 0)
+{
+    <div class="px-4 py-3 text-sm text-slate-500 font-medium">No patients found.</div>
+}
+else
+{
+    <ul class="divide-y divide-slate-100">
+        @foreach (var study in Model)
+        {
+            <li>
+                <button type="button" 
+                        onclick="selectStudy(@study.Id, '@Html.Raw(study.Patient.Name.Replace("'", "\'")) - @study.StudyDate?.ToString("MMM dd, yyyy")')"
+                        class="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors focus:bg-slate-50 outline-none flex items-center justify-between group">
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 group-hover:text-blue-600">@study.Patient.Name</p>
+                        <p class="text-xs font-medium text-slate-500">ID: @study.Patient.PatientId • @study.StudyDate?.ToString("MMM dd, yyyy")</p>
+                    </div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 text-slate-500 rounded border border-slate-200">
+                        @study.Modality
+                    </span>
+                </button>
+            </li>
+        }
+    </ul>
+}

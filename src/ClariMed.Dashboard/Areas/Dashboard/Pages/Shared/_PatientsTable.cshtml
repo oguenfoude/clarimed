@@ -1,0 +1,89 @@
+@model ClariMed.Dashboard.Areas.Dashboard.Pages.PatientsModel
+
+<div id="patients-table" class="bg-white rounded-2xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200/80 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    <th class="px-6 py-4 rounded-tl-lg">Patient</th>
+                    <th class="px-6 py-4">Modality</th>
+                    <th class="px-6 py-4">Accession</th>
+                    <th class="px-6 py-4">Images</th>
+                    <th class="px-6 py-4">Study Date</th>
+                    <th class="px-6 py-4">Status</th>
+                    <th class="px-6 py-4 text-right rounded-tr-lg">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100/80 text-sm font-medium text-slate-700">
+                @foreach (var s in Model.Studies)
+                {
+                    <tr class="hover:bg-blue-50/50 transition-colors group">
+                        <td class="px-6 py-4 flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border border-blue-200 flex items-center justify-center text-blue-700 font-black text-sm shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                                @(string.IsNullOrWhiteSpace(s.PatientName) ? "?" : s.PatientName.Substring(0, 1).ToUpper())
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">@s.PatientName</div>
+                                <div class="text-[11px] text-slate-400 font-semibold mt-0.5">@s.PatientId</div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded border border-slate-200 bg-white shadow-sm text-slate-600 font-bold text-[10px] uppercase tracking-wider">@s.Modality</span>
+                        </td>
+                        <td class="px-6 py-4 text-slate-500 font-mono text-[11px] tracking-tight">@s.AccessionNumber</td>
+                        <td class="px-6 py-4 text-slate-600 font-bold">@s.ImageCount</td>
+                        <td class="px-6 py-4 text-slate-500 font-bold text-xs">
+                            @(s.StudyDate?.ToString("MMM dd, yyyy") ?? s.CreatedAt.ToString("MMM dd, yyyy"))
+                        </td>
+                        <td class="px-6 py-4">
+                            @if (s.Status == ClariMed.Data.Models.StudyStatus.Receiving)
+                            {
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 shadow-sm text-[10px] font-black tracking-wider uppercase">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Receiving
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm text-[10px] font-black tracking-wider uppercase">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                                    Complete
+                                </span>
+                            }
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="/preview/@s.Id" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:text-white border border-blue-200 hover:bg-blue-600 hover:border-blue-600 rounded-lg shadow-sm transition-all hover:shadow-md">
+                                Preview
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Studies.Count == 0)
+                {
+                    <tr>
+                        <td colspan="7" class="px-6 py-20 text-center">
+                            <div class="flex flex-col items-center justify-center">
+                                <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-5">
+                                    <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                </div>
+                                <p class="text-base font-bold text-slate-700">No Patients Found</p>
+                                <p class="text-sm text-slate-400 mt-1 max-w-sm">We couldn't find any patients or studies matching your current search criteria. Try adjusting your filters.</p>
+                                <button type="button" onclick="document.getElementById('pt-search').value='';document.getElementById('pt-modality').value='';document.getElementById('pt-status').value='';document.getElementById('pt-date').value=''; htmx.trigger('#pt-search', 'changed');" class="mt-6 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-colors">Clear All Filters</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Studies.Count == 500)
+    {
+        <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 text-xs font-bold text-slate-400 text-center uppercase tracking-wider">
+            Results limited to the first 500 studies. Narrow your filter criteria if necessary.
+        </div>
+    }
+</div>

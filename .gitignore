@@ -1,0 +1,34 @@
+# .NET Core
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Databases
+db/
+*.db
+*.db-wal
+*.db-shm
+
+# Data & Runtimes
+data/
+WatchFolder/
+Documents/
+Output/
+logs/
+templates/uploads/
+
+# Build Logs
+*.binlog
+msbuild.binlog
+
+# Packages & Publish
+packages/
+*.nupkg
+publish/
