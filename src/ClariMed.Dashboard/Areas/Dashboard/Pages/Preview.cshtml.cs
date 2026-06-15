@@ -251,6 +251,33 @@ public class PreviewModel : PageModel
         return RedirectToPage(new { id = studyId });
     }
 
+    public async Task<IActionResult> OnGetCheckStatusAsync(int id)
+    {
+        var study = await _db.Studies.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
+        if (study == null) return NotFound();
+
+        if (study.Status == StudyStatus.Receiving)
+        {
+            return StatusCode(200); // 200 OK, empty content, keeps HTMX polling
+        }
+        
+        // Complete! Redirect the client back to this page to remove overlay and show images.
+        Response.Headers["HX-Redirect"] = $"/preview/{id}";
+        return StatusCode(200);
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    {
+        var study = await _db.Studies.FirstOrDefaultAsync(s => s.Id == id);
+        if (study != null)
+        {
+            study.IsDeleted = true;
+            study.DeletedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+        return RedirectToPage("/Patients");
+    }
+
     private byte[] OptimizeImageForPdf(string imagePath)
     {
         try

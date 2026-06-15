@@ -23,6 +23,7 @@ Documents/
 Output/
 logs/
 templates/uploads/
+dcm/
 
 # Build Logs
 *.binlog

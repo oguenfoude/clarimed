@@ -5,13 +5,13 @@
         <table class="w-full text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 border-b border-slate-200/80 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    <th class="px-6 py-4 rounded-tl-lg">Patient</th>
-                    <th class="px-6 py-4">Modality</th>
-                    <th class="px-6 py-4">Accession</th>
-                    <th class="px-6 py-4">Images</th>
-                    <th class="px-6 py-4">Study Date</th>
+                    <th class="px-6 py-4 rounded-tl-lg">@Loc["Patients_Col_Patient"]</th>
+                    <th class="px-6 py-4">@Loc["Patients_Col_Modality"]</th>
+                    <th class="px-6 py-4">@Loc["Patients_Col_Accession"]</th>
+                    <th class="px-6 py-4">@Loc["Patients_Col_Images"]</th>
+                    <th class="px-6 py-4">@Loc["Patients_Col_Date"]</th>
                     <th class="px-6 py-4">Status</th>
-                    <th class="px-6 py-4 text-right rounded-tr-lg">Actions</th>
+                    <th class="px-6 py-4 text-right rounded-tr-lg">@Loc["Patients_Col_Actions"]</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100/80 text-sm font-medium text-slate-700">
@@ -52,12 +52,21 @@
                             }
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="/preview/@s.Id" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:text-white border border-blue-200 hover:bg-blue-600 hover:border-blue-600 rounded-lg shadow-sm transition-all hover:shadow-md">
-                                Preview
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
-                                </svg>
-                            </a>
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="/preview/@s.Id" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:text-white border border-blue-200 hover:bg-blue-600 hover:border-blue-600 rounded-lg shadow-sm transition-all hover:shadow-md">
+                                    @Loc["Patients_Btn_Preview"]
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </a>
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@s.Id" class="inline" onsubmit="return confirm('Are you sure you want to permanently delete this study and all associated files?');">
+                                    <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-white border border-rose-200 hover:bg-rose-600 hover:border-rose-600 rounded-lg shadow-sm transition-all hover:shadow-md" title="Delete Study">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -69,8 +78,8 @@
                                 <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-5">
                                     <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                 </div>
-                                <p class="text-base font-bold text-slate-700">No Patients Found</p>
-                                <p class="text-sm text-slate-400 mt-1 max-w-sm">We couldn't find any patients or studies matching your current search criteria. Try adjusting your filters.</p>
+                                <p class="text-base font-bold text-slate-700">@Loc["Patients_NoResults"]</p>
+                                <p class="text-sm text-slate-400 mt-1 max-w-sm">@Loc["Patients_NoResultsDesc"]</p>
                                 <button type="button" onclick="document.getElementById('pt-search').value='';document.getElementById('pt-modality').value='';document.getElementById('pt-status').value='';document.getElementById('pt-date').value=''; htmx.trigger('#pt-search', 'changed');" class="mt-6 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-colors">Clear All Filters</button>
                             </div>
                         </td>

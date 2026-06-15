@@ -177,7 +177,7 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
                 }
 
                 // ── Upsert Study ──
-                study = await db.Studies.FirstOrDefaultAsync(s => s.StudyInstanceUid == studyUid);
+                study = await db.Studies.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.StudyInstanceUid == studyUid);
                 if (study == null)
                 {
                     study = new Study
@@ -194,6 +194,15 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
                         LastImageReceivedAt = DateTime.UtcNow
                     };
                     db.Studies.Add(study);
+                    await db.SaveChangesAsync();
+                }
+                else if (study.IsDeleted)
+                {
+                    // Restore from Recycle Bin
+                    study.IsDeleted = false;
+                    study.DeletedAt = null;
+                    study.Status = StudyStatus.Receiving;
+                    study.LastImageReceivedAt = DateTime.UtcNow;
                     await db.SaveChangesAsync();
                 }
 
@@ -306,23 +315,7 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
                 _dbLock.Release();
             }
 
-            _logger.LogInformation("""
-                ✅ DICOM Received & Stored:
-                ──────────────────────────────────────────────────────────
-                Patient:    {PatientName} ({Sex}) [ID: {PatientId}]
-                Study:      {StudyDesc} ({Modality})
-                Date:       {StudyDate}
-                Physician:  {Physician}
-                Hospital:   {Institution}
-                Frames:     {FrameCount}
-                File:       {SafeInstance}.dcm
-                ──────────────────────────────────────────────────────────
-                """, 
-                patientName, patientSex, patientIdTag,
-                studyDesc, modality, 
-                studyDate?.ToString("yyyy-MM-dd") ?? "N/A",
-                referringPhysician, institution,
-                frameCount, safeInstance);
+            _logger.LogInformation("Image received: {PatientName} / {Modality} / {SopUid}", patientName, modality, sopUid);
 
             return new DicomCStoreResponse(request, DicomStatus.Success);
         }

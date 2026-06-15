@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.IO;
 
 namespace ClariMed.Dashboard.Areas.Dashboard.Pages;
 
@@ -27,22 +28,22 @@ public class PatientsModel : PageModel
         _scopeFactory = scopeFactory;
     }
 
-    public async Task OnGetAsync(string? search, string? modality, string? status, string? date)
+    public async Task OnGetAsync(string? search, string? modality, string? status, string? startDate, string? endDate)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
-        await LoadAsync(db, search, modality, status, date);
+        await LoadAsync(db, search, modality, status, startDate, endDate);
     }
 
-    public async Task<IActionResult> OnGetTableAsync(string? search, string? modality, string? status, string? date)
+    public async Task<IActionResult> OnGetTableAsync(string? search, string? modality, string? status, string? startDate, string? endDate)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
-        await LoadAsync(db, search, modality, status, date);
+        await LoadAsync(db, search, modality, status, startDate, endDate);
         return Partial("Shared/_PatientsTable", this);
     }
 
-    private async Task LoadAsync(ClariMedDbContext db, string? search, string? modality, string? status, string? date)
+    private async Task LoadAsync(ClariMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate)
     {
         // Global stats
         TotalStudies = await db.Studies.CountAsync();
@@ -80,14 +81,16 @@ public class PatientsModel : PageModel
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(date))
+        if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var parsedStart))
         {
-            if (DateTime.TryParse(date, out var parsedDate))
-            {
-                var localDate = parsedDate.Date;
-                var nextDay = localDate.AddDays(1);
-                query = query.Where(s => s.StudyDate >= localDate && s.StudyDate < nextDay);
-            }
+            var localStart = parsedStart.Date;
+            query = query.Where(s => s.StudyDate >= localStart);
+        }
+
+        if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var parsedEnd))
+        {
+            var localEnd = parsedEnd.Date.AddDays(1);
+            query = query.Where(s => s.StudyDate < localEnd);
         }
 
         // Indexing from old to new (ascending order)
@@ -107,5 +110,23 @@ public class PatientsModel : PageModel
             Status = s.Status,
             CreatedAt = s.CreatedAt
         }).ToList();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
+
+        var study = await db.Studies
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (study != null)
+        {
+            study.IsDeleted = true;
+            study.DeletedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        return RedirectToPage();
     }
 }

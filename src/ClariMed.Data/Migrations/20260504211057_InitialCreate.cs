@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -20,7 +20,6 @@ namespace ClariMed.Data.Migrations
                     ClinicName = table.Column<string>(type: "TEXT", nullable: false),
                     AETitle = table.Column<string>(type: "TEXT", nullable: false),
                     DicomPort = table.Column<int>(type: "INTEGER", nullable: false),
-                    PrinterName = table.Column<string>(type: "TEXT", nullable: false),
                     ArchivePath = table.Column<string>(type: "TEXT", nullable: false),
                     DatabasePath = table.Column<string>(type: "TEXT", nullable: false),
                     ArchiveIntervalMonths = table.Column<int>(type: "INTEGER", nullable: false),

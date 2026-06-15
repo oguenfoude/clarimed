@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using ClariMed.Data.Repositories;
@@ -25,16 +26,16 @@ public class WindowsPrinterRegistration
         var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
 
         var settings = await settingsRepo.GetAsync();
-        if (settings.PrinterRegistered)
-        {
-            _logger.LogInformation("Virtual printer already registered.");
-            return;
-        }
-
         var watchFolder = settings.WatchFolderPath;
         var portName = Path.Combine(watchFolder, "VirtualPrint.pdf");
         var printerName = "ClariMed";
         var driverName = "Microsoft Print To PDF";
+
+        if (await CheckPrinterExistsAsync(printerName))
+        {
+            _logger.LogInformation("Virtual printer already registered in Windows. Skipping setup.");
+            return;
+        }
 
         _logger.LogInformation($"Attempting to register ClariMed Virtual Printer '{printerName}' via PowerShell on port '{portName}'...");
 
@@ -76,6 +77,32 @@ public class WindowsPrinterRegistration
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to register Windows printer. This usually requires Administrator privileges.");
+        }
+    }
+
+    private async Task<bool> CheckPrinterExistsAsync(string printerName)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"Get-Printer -Name '{printerName}' -ErrorAction Stop\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        try
+        {
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+            
+            await process.WaitForExitAsync();
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -195,7 +195,7 @@ public class DicomFileIngestionService
         var dcmPath = Path.Combine(storageDir, $"{safeInstance}.dcm");
 
         // Copy the source file to archive
-        File.Copy(filePath, dcmPath, overwrite: false);
+        File.Copy(filePath, dcmPath, overwrite: true);
 
         // ── Convert pixel data to PNG (Cache) ──
         string? pngPath = null;

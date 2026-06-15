@@ -25,6 +25,12 @@ public class Study
     /// <summary>UTC timestamp when the study was marked complete. Null while receiving.</summary>
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Indicates if the study has been moved to the Recycle Bin.</summary>
+    public bool IsDeleted { get; set; } = false;
+
+    /// <summary>UTC timestamp when the study was soft-deleted.</summary>
+    public DateTime? DeletedAt { get; set; }
+
     public Patient Patient { get; set; } = null!;
     public List<Series> SeriesList { get; set; } = new();
 }

@@ -34,6 +34,9 @@ public class ClariMedDbContext : DbContext
             entity.HasIndex(e => e.StudyDate);
             entity.HasIndex(e => e.Modality);
             entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.IsDeleted);
+            
+            entity.HasQueryFilter(s => !s.IsDeleted);
         });
 
         modelBuilder.Entity<Series>(entity =>

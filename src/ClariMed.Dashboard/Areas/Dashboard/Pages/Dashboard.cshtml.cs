@@ -42,6 +42,8 @@ public class DashboardModel : PageModel
         return Partial("Shared/_StudiesTable", this);
     }
 
+
+
     public async Task<IActionResult> OnGetCheckInboxAsync(string? dismissed)
     {
         // Prevent infinite popups if the user is already on the assignment page

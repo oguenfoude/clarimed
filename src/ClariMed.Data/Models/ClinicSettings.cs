@@ -10,19 +10,12 @@ public class ClinicSettings
     public string ClinicName { get; set; } = "ClariMed Clinic";
     public string AETitle { get; set; } = "CLARIMED";
     public int DicomPort { get; set; } = 104;
-    public string PrinterName { get; set; } = string.Empty;
     public string ArchivePath { get; set; } = "archive";
     public string DatabasePath { get; set; } = "db/clarimed.db";
     public int ArchiveIntervalMonths { get; set; } = 3;
 
     /// <summary>Folder monitored by the DocumentWatcher for incoming .docx files.</summary>
     public string WatchFolderPath { get; set; } = @"C:\ClariMed\WatchFolder";
-
-    /// <summary>Output directory for converted PDFs (.docx → .pdf).</summary>
-    public string DocumentOutputPath { get; set; } = @"C:\ClariMed\Documents";
-
-    /// <summary>Output directory for final merged PDFs (cover + report + images).</summary>
-    public string MergedPdfOutputPath { get; set; } = @"C:\ClariMed\Output";
 
     /// <summary>UI language: "en" or "fr".</summary>
     public string Language { get; set; } = "en";

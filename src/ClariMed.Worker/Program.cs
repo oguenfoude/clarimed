@@ -64,8 +64,11 @@ builder.Services.AddHostedService<DocumentProcessingService>();
 builder.Services.AddHostedService<DocumentWatcherService>();
 builder.Services.AddHostedService<StudyCompletionService>();
 builder.Services.AddHostedService<VirtualPrinterService>();
+builder.Services.AddHostedService<RecycleBinCleanupService>();
 
-// ── Add Razor Pages support ──
+// ── Add Localization and Razor Pages support ──
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<ClariMed.Dashboard.Services.ILocalizationService, ClariMed.Dashboard.Services.LocalizationService>();
 builder.Services.AddRazorPages();
 
 var app = builder.Build();

@@ -43,6 +43,10 @@
                 <div class="flex items-center gap-3 mt-1.5 text-xs font-medium text-slate-500">
                     <span class="flex items-center gap-1"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> @Model.Study.Patient?.PatientId</span>
                     <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="flex items-center gap-1">@Model.Study.Patient?.Sex</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="flex items-center gap-1">@(Model.Study.Patient?.BirthDate != null ? $"DOB: {Model.Study.Patient.BirthDate.Value:yyyy-MM-dd}" : "")</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
                     <span class="flex items-center gap-1"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> @Model.Study.AccessionNumber</span>
                     <span class="w-1 h-1 rounded-full bg-slate-300"></span>
                     <span class="text-slate-600">@Model.Study.StudyDescription</span>
@@ -73,14 +77,14 @@
             @if (Model.LinkedDocument != null)
             {
                 <form method="post" asp-page-handler="RemoveDocument" asp-route-studyId="@Model.Study.Id" asp-route-docId="@Model.LinkedDocument.Id" class="m-0 flex items-center">
-                    <button type="submit" class="h-10 px-4 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
-                        <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        Reset Study
+                    <button type="submit" class="h-10 px-4 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Unlink Document
                     </button>
                 </form>
             }
 
-            <div class="w-px h-8 bg-slate-200"></div>
+
 
             <div class="flex items-center gap-3">
                 <a x-show="pdfUrl" :href="pdfUrl" target="_blank" download class="h-10 px-4 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
@@ -110,9 +114,27 @@
 
     <!-- MAIN BODY SECTION -->
     <div class="flex-1 flex flex-row overflow-hidden relative">
+
+        @if (Model.Study.Status == ClariMed.Data.Models.StudyStatus.Receiving)
+        {
+            <!-- Polling Overlay -->
+            <div class="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center"
+                 hx-get="/preview/@Model.Study.Id?handler=CheckStatus"
+                 hx-trigger="every 3s"
+                 hx-swap="none">
+                <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+                    <svg class="w-12 h-12 animate-spin text-blue-600 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <h3 class="text-lg font-bold text-slate-800">Receiving Images...</h3>
+                    <p class="text-sm text-slate-500 mt-2">Please wait while the study finishes transmitting from the modality.</p>
+                </div>
+            </div>
+        }
         
         <!-- LEFT SIDEBAR -->
-        <aside class="left-sidebar w-[340px] bg-white border-r border-slate-200 flex flex-col shrink-0 h-full overflow-hidden shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
+        <aside class="left-sidebar w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 h-full overflow-hidden shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
 
 
             <!-- Image Selection Header -->
@@ -147,7 +169,8 @@
                         </div>
 
                         <!-- Thumbnail -->
-                        <div class="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-black flex items-center justify-center shadow-inner">
+                        <div class="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-black flex items-center justify-center shadow-inner cursor-pointer"
+                             x-on:click.stop="modalImage = img.path">
                             <img :src="img.thumbPath" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy"/>
                         </div>
 
@@ -269,6 +292,13 @@
                     </div>
                 </div>
             </div>
+            <!-- Full-screen Image Modal -->
+            <div x-show="modalImage" style="display:none;" x-transition.opacity.duration.300ms class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-8">
+                <button x-on:click="modalImage = null" class="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors bg-white/10 rounded-full p-2">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <img :src="modalImage" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl ring-1 ring-white/10" x-on:click.outside="modalImage = null" />
+            </div>
         </div>
     </div>
 </div>
@@ -285,6 +315,7 @@
                 generating: false,
                 pdfUrl: null,
                 coverPageBase64: null,
+                modalImage: null,
 
                 get columnsPerRow() {
                     const len = parseInt(this.imagesPerPage);
