@@ -63,6 +63,13 @@
   "RecycleBin_Col_DeletedAt": "Supprimé Le",
   "RecycleBin_Col_Actions": "Actions",
   "RecycleBin_Btn_Restore": "Restaurer",
-  "RecycleBin_Btn_DeleteForever": "Supprimer Définitivement",
-  "RecycleBin_ConfirmDelete": "Êtes-vous sûr de vouloir supprimer définitivement cet examen et tous ses fichiers ? Cette action est irréversible."
+  "RecycleBin_Btn_DeleteForever": "Supprimer définitivement",
+  "RecycleBin_ConfirmDelete": "Êtes-vous sûr de vouloir supprimer définitivement cet examen et tous ses fichiers ? Cette action est irréversible.",
+
+  "Settings_Title": "Paramètres",
+  "Settings_Desc": "Configurez votre installation",
+  "Settings_General": "Préférences générales",
+  "Settings_LanguageLabel": "Langue",
+  "Settings_LanguageDesc": "Sélectionnez la langue par défaut de l'interface du portail de la clinique.",
+  "Settings_Save": "Enregistrer les modifications"
 }

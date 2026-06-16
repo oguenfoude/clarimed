@@ -29,49 +29,23 @@ public class SettingsModel : PageModel
     public async Task<IActionResult> OnPostAsync()
     {
         var lang = Request.Form["Language"].FirstOrDefault() ?? "en";
-        var resume = Request.Form["ResumeText"].FirstOrDefault() ?? "";
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
             var settings = await repo.GetAsync();
             settings.Language = lang;
-            settings.ResumeText = resume;
             await repo.UpdateAsync(settings);
-            return Content("<span class='text-green-600 text-sm font-medium'>" + T("SavedOk") + "</span>");
+            
+            // Note: Since we are using an HTMX form submission, returning localized strings here 
+            // is tricky if the language changes in the same request. We can just return a generic success 
+            // or trigger a page reload via HX-Refresh.
+            Response.Headers["HX-Refresh"] = "true";
+            return Content("");
         }
         catch (Exception ex)
         {
             return Content("<span class='text-red-600 text-sm font-medium'>Error: " + ex.Message + "</span>");
         }
-    }
-
-    public string T(string key)
-    {
-        if (Lang == "fr")
-        {
-            return key switch
-            {
-                "Settings" => "Paramètres",
-                "SettingsDesc" => "Configurez votre installation",
-                "LanguageLabel" => "Langue",
-                "ResumeLabel" => "Rapport médical",
-                "ResumeDesc" => "Texte qui apparaîtra entre la page de garde et les images dans le PDF",
-                "Save" => "Enregistrer",
-                "SavedOk" => "✓ Enregistré",
-                _ => key
-            };
-        }
-        return key switch
-        {
-            "Settings" => "Settings",
-            "SettingsDesc" => "Configure your installation",
-            "LanguageLabel" => "Language",
-            "ResumeLabel" => "Medical Report",
-            "ResumeDesc" => "Text that appears between the cover page and images in the PDF",
-            "Save" => "Save",
-            "SavedOk" => "✓ Saved",
-            _ => key
-        };
     }
 }

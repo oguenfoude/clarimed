@@ -13,10 +13,10 @@ namespace ClariMed.Notifier
     {
         private readonly int _inboxDocId;
         private readonly IServiceScopeFactory _scopeFactory;
-        private Label _lblTitle;
-        private CheckBox _chkShowAll;
-        private FlowLayoutPanel _flpStudies;
-        private Button _btnDismiss;
+        private Label _lblTitle = null!;
+        private CheckBox _chkShowAll = null!;
+        private FlowLayoutPanel _flpStudies = null!;
+        private Button _btnDismiss = null!;
 
         public AssignForm(int inboxDocId, IServiceScopeFactory scopeFactory)
         {
@@ -96,7 +96,7 @@ namespace ClariMed.Notifier
             {
                 var assignedStudyIds = await db.Documents
                     .Where(d => d.StudyId != null)
-                    .Select(d => d.StudyId.Value)
+                    .Select(d => d.StudyId ?? 0)
                     .ToListAsync();
                 
                 studiesQuery = studiesQuery.Where(s => !assignedStudyIds.Contains(s.Id));
@@ -127,7 +127,12 @@ namespace ClariMed.Notifier
                     Tag = s.Id
                 };
                 btn.FlatAppearance.BorderColor = Color.LightGray;
-                btn.Click += async (sender, e) => await AssignToStudy((int)((Button)sender).Tag);
+                btn.Click += async (sender, e) => {
+                    if (sender is Button button && button.Tag is int studyId)
+                    {
+                        await AssignToStudy(studyId);
+                    }
+                };
 
                 _flpStudies.Controls.Add(btn);
             }

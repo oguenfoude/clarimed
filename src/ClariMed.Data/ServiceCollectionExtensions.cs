@@ -18,6 +18,8 @@ public static class ServiceCollectionExtensions
                 $"Data Source={databasePath}",
                 b => b.MigrationsAssembly("ClariMed.Data"));
             options.AddInterceptors(sp.GetRequiredService<WalModeInterceptor>());
+            options.ConfigureWarnings(warnings => warnings.Ignore(
+                Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
         });
 
         // Repositories (scoped — one per DI scope, matching DbContext lifetime)

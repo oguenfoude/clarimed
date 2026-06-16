@@ -64,5 +64,12 @@
   "RecycleBin_Col_Actions": "Actions",
   "RecycleBin_Btn_Restore": "Restore",
   "RecycleBin_Btn_DeleteForever": "Delete Forever",
-  "RecycleBin_ConfirmDelete": "Are you sure you want to permanently delete this study and all its files? This cannot be undone."
+  "RecycleBin_ConfirmDelete": "Are you sure you want to permanently delete this study and all its files? This cannot be undone.",
+
+  "Settings_Title": "Settings",
+  "Settings_Desc": "Configure your installation",
+  "Settings_General": "General Preferences",
+  "Settings_LanguageLabel": "Language",
+  "Settings_LanguageDesc": "Select the default interface language for the clinic portal.",
+  "Settings_Save": "Save Changes"
 }
