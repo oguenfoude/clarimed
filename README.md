@@ -31,7 +31,7 @@ ClariMed runs as a Windows Service and operates parallel, fully asynchronous pip
 | ---------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **DICOM Ingestion**    | Images from X-Ray / CT / MRI over TCP port 104    | `.dcm` archive + `.png` images + SQLite records                  |
 | **Document Ingestion** | `.docx` files dropped into a watch folder         | Converted `.pdf` + SQLite `Document` record                      |
-| **Virtual Printer**    | PDFs sent to IPP Printer (Port 5000)              | PDF stored in `InboxDocument` waiting for assignment             |
+| **Virtual Printer**    | PDFs printed to "ClariMed" Windows printer        | PDF stored in `InboxDocument` waiting for assignment             |
 | **Merge & Print**      | Generated directly via Study Preview             | Final merged PDF (cover + report + images) → silent print        |
 | **Dashboard**          | Web browser at `http://localhost:5000`            | Study viewer, patient browser, inbox assignment, settings page   |
 
@@ -66,7 +66,7 @@ flowchart TD
         end
 
         subgraph VPrinter["ClariMed.VirtualPrinter"]
-            IPP["IppPrinterServer\nIPP POST Handler"]
+            Reg["WindowsPrinterRegistration\nFile-based virtual printer"]
         end
 
         subgraph Img["ClariMed.Imaging"]
@@ -105,9 +105,9 @@ flowchart TD
     S3 --"ReadAllAsync"--> Q --> Conv --"save .pdf"--> FS
     S3 --"Document"--> DB
 
-    IPPClient --"POST /printers/clarimed\nTCP:5000"--> S6 --> IPP
-    IPP --"InboxDocument"--> DB
-    IPP --"Save .pdf"--> FS
+    IPPClient --"Print to ClariMed\nVirtualPrint.pdf"--> S6 --> Reg
+    Reg --"InboxDocument"--> DB
+    Reg --"Save .pdf"--> FS
 
     S5 --"poll Receiving\nevery 10s"--> DB
     S5 --"Status=Complete"--> DB
@@ -133,8 +133,9 @@ D:\ClariMed\
 │   ├── ClariMed.Documents/               ← Document watcher + Spire conversion
 │   ├── ClariMed.Imaging/                 ← Image conversion utilities
 │   ├── ClariMed.Printing/                ← PDF generation + QuestPDF cover + silent printing
-│   ├── ClariMed.VirtualPrinter/          ← IPP Virtual Printer server
+│   ├── ClariMed.VirtualPrinter/          ← File-based virtual printer registration
 │   ├── ClariMed.Dashboard/               ← Razor Pages web interface
+│   ├── ClariMed.Notifier/                ← Standalone WinForms app for virtual printer notifications
 │   └── ClariMed.Worker/                  ← Windows Service orchestrator
 │
 └── tests/
@@ -164,8 +165,9 @@ D:\ClariMed\
 
 ### ClariMed.VirtualPrinter
 
-- Exposes an **IPP (Internet Printing Protocol) server** at `/printers/clarimed` on port 5000.
-- Extracts PDFs from the print payloads, saving them to `data/inbox` and creating an `InboxDocument` in the DB.
+- **File-based virtual printer**: `WindowsPrinterRegistration` registers a Windows printer named "ClariMed" using the "Microsoft Print To PDF" driver, with a file port pointing to `VirtualPrint.pdf` in the watch folder.
+- `VirtualPrinterService` uses `FileSystemWatcher` to detect when `VirtualPrint.pdf` is created or changed, reads it, saves to `data/inbox`, and creates an `InboxDocument` in the DB.
+- Requires Admin for PowerShell printer registration; failure is non-fatal (logged as warning).
 - Integrates with a local Windows Form Notifier popup (`AssignForm.cs`) to prompt the user instantly on incoming print jobs.
 
 ### ClariMed.Printing
@@ -194,8 +196,9 @@ A Razor Pages class library integrated via the ASP.NET Core **Areas pattern**.
 | 1   | `DicomListenerService`      | Opens TCP port 104 as the configured AE Title. Keeps the DICOM server alive.                                                                                         |
 | 2   | `DocumentWatcherService`    | Calls `StartAsync` on every registered `IDocumentIngestionChannel`. Currently: `WatchFolderIngestionChannel`.                                                        |
 | 3   | `DocumentProcessingService` | Drains `DocumentIngestionQueue` with `ReadAllAsync`. Converts each `.docx` to PDF, saves `Document` record.                                                           |
-| 4   | `VirtualPrinterService`     | Supports the IPP Endpoint, receiving print payloads from standard Windows Print Dialogs and routing them into the Inbox.                                             |
-| 5   | `StudyCompletionService`    | Polls every 10 seconds for studies in `Receiving` status whose `LastImageReceivedAt` exceeds the stabilization window (default 30s). Sets `Status=Complete`.         |
+| 4   | `StudyCompletionService`    | Polls every 10 seconds for studies in `Receiving` status whose `LastImageReceivedAt` exceeds the stabilization window (default 30s). Sets `Status=Complete`.         |
+| 5   | `VirtualPrinterService`     | Detects `VirtualPrint.pdf` in watch folder via `FileSystemWatcher`, imports as inbox document. Registers Windows printer via PowerShell.                                |
+| 6   | `RecycleBinCleanupService`  | Runs every 12 hours. Permanently deletes soft-deleted studies older than 30 days (files + DB records).                                                                |
 
 ---
 
@@ -284,7 +287,7 @@ erDiagram
 
 ```
 C:\ClariMed\
-├── WatchFolder\          ← Drop .docx files here (monitored by FileSystemWatcher)
+├── WatchFolder\          ← Drop .docx files here (also VirtualPrint.pdf lands here)
 ├── Documents\            ← Converted PDFs (.docx → .pdf output)
 └── Output\               ← Final merged PDFs (Cover + Report + Images)
 
@@ -294,22 +297,23 @@ D:\ClariMed\              ← Working directory
 └── data\
     ├── archive\          ← Raw .dcm files organized by Patient/Study/Series
     ├── images\           ← Converted PNG files (mirror of archive structure)
-    └── inbox\            ← PDFs captured from the IPP Virtual Printer port
+    └── inbox\            ← PDFs captured from the Virtual Printer
 ```
 
 ---
 
 ## Configuration Reference
 
-Settings live in `src/ClariMed.Worker/appsettings.json` (also overridden by the database `ClinicSettings` table):
+Settings live in `src/ClariMed.Worker/appsettings.json` (also overridden by the database `ClinicSettings` table — DB takes precedence for most settings at runtime):
 
 | Key                     | Default                   | Description                                            |
 | ----------------------- | ------------------------- | ------------------------------------------------------ |
 | `DicomPort`             | `104`                     | TCP port the DICOM C-STORE SCP listens on              |
 | `AETitle`               | `CLARIMED`                | DICOM Application Entity Title                         |
-| `DatabasePath`          | `db/clarimed.db`          | Path to SQLite database file (relative to working dir) |
+| `DatabasePath`          | `C:\ClariMed\clarimed.db` | Path to SQLite database file                           |
 | `ArchivePath`           | `data/archive`            | Root path for raw `.dcm` file storage                  |
 | `WatchFolderPath`       | `C:\ClariMed\WatchFolder` | Folder monitored for incoming `.docx` files            |
+| `StudyStabilizationSeconds` | `30`                  | Config-only: seconds before a study is marked Complete |
 
 ---
 
@@ -376,5 +380,4 @@ Linking an incoming Virtual Printer PDF from the Inbox now immediately redirects
 | Authentication        | `BCrypt.Net-Next` for admin login on Dashboard          |
 | Archive Cleanup       | Auto-move old studies after `ArchiveIntervalMonths`     |
 | Multi-printer routing | Route print jobs to different printers by modality      |
-#   c l a r i m e d  
- 
+#

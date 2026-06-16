@@ -10,14 +10,15 @@
   ```
   Design-time factory uses `Data Source=db/clarimed.db`.
 - **Run**: `dotnet watch run --project src\ClariMed.Worker` — uses `launchSettings.json`, opens `http://localhost:5000`.
+- **`UseAppHost=false`** in Worker `.csproj` prevents `dotnet watch` file-lock errors on `pdfium.dll`.
 - **No tests** — `tests/` dir is empty. No CI/CD.
 
 ## Architecture
 
 - **Worker** (`ClariMed.Worker`) is the sole orchestrator. 6 background services:
-  `DicomListenerService`, `DocumentProcessingService`, `DocumentWatcherService`, `PrintJobProcessor`, `StudyCompletionService`, `VirtualPrinterService`.
+  `DicomListenerService`, `DocumentProcessingService`, `DocumentWatcherService`, `StudyCompletionService`, `VirtualPrinterService`, `RecycleBinCleanupService`.
   All registered in `Program.cs`.
-- **8 projects**: each library exposes `ServiceCollectionExtensions` with `AddClariMedXxx()`.
+- **9 projects** in solution. Worker references 7 directly. `ClariMed.Notifier` is a standalone WinForms app (`OutputType=WinExe`) that connects to the same DB.
 - **Dependency flow**: Worker → everything else. Libraries only depend on `ClariMed.Data` (except `ClariMed.Printing` and `ClariMed.Imaging` which are standalone).
 - **Dashboard**: Razor Pages Areas pattern under `Areas/Dashboard/Pages/`. Served by Worker process.
 
@@ -27,6 +28,7 @@
 - **DB row takes precedence** over `appsettings.json` for most settings (loaded at service start). Exception: `StudyStabilizationSeconds` is config-only.
 - `ClinicSettingsRepository.GetAsync()` auto-seeds a default row if none exists.
 - `db.Database.Migrate()` runs on every startup in `Program.cs`.
+- `appsettings.json` default `DatabasePath` is `C:\ClariMed\clarimed.db`; Program.cs fallback is `db/clarimed.db`; design-time factory uses `db/clarimed.db`.
 
 ## Key Conventions & Pitfalls
 
@@ -35,8 +37,9 @@
 - **FreeSpire.Doc** free version: 500 paragraph / 3 page limit per conversion. OK for cover sheets, not for long reports.
 - **QuestPDF** Community license: revenue < $1M/year. Set in `Program.cs`.
 - **DICOM C-STORE** on port 104 (requires Admin or `netsh urlacl`). Failure to bind logs a warning but does not crash the host — other services continue.
-- **Virtual Printer** on port 5000 via IPP endpoint at `/printers/clarimed`. Windows printer registration runs PowerShell commands requiring Admin. Failure is non-fatal (logged as warning).
+- **Virtual Printer** is file-based, not IPP. `WindowsPrinterRegistration` registers a "ClariMed" Windows printer using "Microsoft Print To PDF" driver with a file port pointing to `VirtualPrint.pdf` in the watch folder. `VirtualPrinterService` uses `FileSystemWatcher` to detect that file, reads it, saves to `data/inbox`, and creates an `InboxDocument`. Requires Admin for PowerShell printer registration; failure is non-fatal.
 - **`DicomFileIngestionService`** uses a `SemaphoreSlim(1,1)` for sequential DB upserts — single-threaded ingestion by design.
+- **`RecycleBinCleanupService`** runs every 12 hours, permanently deletes soft-deleted studies older than 30 days (files + DB records).
 
 ## DICOM / Test Files
 
@@ -47,7 +50,7 @@
 ## File System (Runtime)
 
 ```
-C:\ClariMed\WatchFolder\   — drop .docx here
+C:\ClariMed\WatchFolder\   — drop .docx here (also VirtualPrint.pdf lands here)
 C:\ClariMed\Documents\     — converted PDFs
 C:\ClariMed\Output\        — merged PDFs
 
