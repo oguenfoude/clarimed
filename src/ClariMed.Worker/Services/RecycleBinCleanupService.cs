@@ -50,6 +50,7 @@ public class RecycleBinCleanupService : BackgroundService
 
         var oldStudies = await db.Studies
             .IgnoreQueryFilters()
+            .AsSplitQuery()
             .Include(s => s.Patient)
             .Include(s => s.SeriesList)
                 .ThenInclude(series => series.Images)

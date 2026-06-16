@@ -16,6 +16,7 @@ public class StudyRepository : IStudyRepository
     {
         return await _db.Studies
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(s => s.Patient)
             .Include(s => s.SeriesList)
             .FirstOrDefaultAsync(s => s.StudyInstanceUid == studyInstanceUid);

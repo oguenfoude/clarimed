@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ClariMed.Dashboard.Areas.Dashboard.Pages;
 
+[IgnoreAntiforgeryToken]
 public class DashboardModel : PageModel
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -56,9 +57,7 @@ public class DashboardModel : PageModel
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
         
-        var dismissedIds = string.IsNullOrEmpty(dismissed) 
-            ? new List<int>() 
-            : dismissed.Split(',').Where(s => int.TryParse(s, out _)).Select(int.Parse).ToList();
+        var dismissedIds = new List<int>();
 
         var unassigned = await db.InboxDocuments
             .Where(d => d.Status == InboxDocumentStatus.Unassigned && !dismissedIds.Contains(d.Id))
@@ -85,7 +84,7 @@ public class DashboardModel : PageModel
                             <strong class='text-slate-800'>{unassigned.FileName}</strong> is waiting to be assigned to a patient study.
                         </p>
                         <div class='flex gap-3 justify-end'>
-                            <button onclick='dismissInboxModal({unassigned.Id})' class='px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>Dismiss</button>
+                            <button hx-post='/dashboard?handler=DismissInbox&id={unassigned.Id}' hx-target='#inbox-modal-overlay' hx-swap='delete' class='px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>Dismiss</button>
                             <a href='/dashboard/assign?inboxDocId={unassigned.Id}' class='px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors'>Assign Now</a>
                         </div>
                     </div>
@@ -93,6 +92,20 @@ public class DashboardModel : PageModel
             ", "text/html");
         }
 
+        return new EmptyResult();
+    }
+
+    public async Task<IActionResult> OnPostDismissInboxAsync(int id)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
+        var doc = await db.InboxDocuments.FindAsync(id);
+        if (doc != null)
+        {
+            try { if (System.IO.File.Exists(doc.PdfPath)) System.IO.File.Delete(doc.PdfPath); } catch { }
+            db.InboxDocuments.Remove(doc);
+            await db.SaveChangesAsync();
+        }
         return new EmptyResult();
     }
 

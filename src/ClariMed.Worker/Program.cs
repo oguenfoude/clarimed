@@ -3,12 +3,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using ClariMed.Data;
+using ClariMed.Data.Models;
+using ClariMed.Data.Services;
 using ClariMed.Dicom;
 using ClariMed.Documents;
 using ClariMed.Imaging;
 using ClariMed.Printing;
 using ClariMed.VirtualPrinter;
 using ClariMed.Worker.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -65,6 +68,19 @@ builder.Services.AddHostedService<DocumentWatcherService>();
 builder.Services.AddHostedService<StudyCompletionService>();
 builder.Services.AddHostedService<VirtualPrinterService>();
 builder.Services.AddHostedService<RecycleBinCleanupService>();
+builder.Services.AddHostedService<DicomRestartService>();
+
+// ── Authentication (Cookie-based) ──
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/login";
+        options.LogoutPath = "/login";
+        options.AccessDeniedPath = "/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(24);
+        options.SlidingExpiration = true;
+    });
+builder.Services.AddAuthorization();
 
 // ── Add Localization and Razor Pages support ──
 builder.Services.AddHttpContextAccessor();
@@ -73,7 +89,7 @@ builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// ── Initialize Database and License ──
+// ── Initialize Database, License, and Seed Admin ──
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 using (var scope = app.Services.CreateScope())
@@ -87,6 +103,19 @@ using (var scope = app.Services.CreateScope())
     {
         settings.PrinterRegistered = false;
         db.SaveChanges();
+    }
+
+    // Seed default admin user if no users exist
+    var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+    if (await userRepo.GetCountAsync() == 0)
+    {
+        await userRepo.AddAsync(new User
+        {
+            Username = "admin",
+            DisplayName = "Administrator",
+            Role = UserRole.Admin,
+            IsActive = true
+        }, "admin");
     }
 }
 
@@ -122,6 +151,10 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+
+// ── Authentication & Authorization middleware ──
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Redirect root to dashboard
 app.MapGet("/", async context =>

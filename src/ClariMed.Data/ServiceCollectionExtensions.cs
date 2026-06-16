@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IClinicSettingsRepository, ClinicSettingsRepository>();
         services.AddScoped<IDocumentRepository, DocumentRepository>();
         services.AddScoped<ClariMed.Data.Repositories.IInboxDocumentRepository, ClariMed.Data.Repositories.InboxDocumentRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
         return services;
     }

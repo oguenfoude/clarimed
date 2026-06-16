@@ -18,22 +18,72 @@ public class RecycleBinModel : PageModel
     private readonly IServiceScopeFactory _scopeFactory;
 
     public List<StudyRow> DeletedStudies { get; set; } = new();
+    public List<string> Modalities { get; set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public string? Search { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? Modality { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? StartDate { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? EndDate { get; set; }
 
     public RecycleBinModel(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
     }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(string? search, string? modality, DateTime? startDate, DateTime? endDate)
     {
+        Search = search;
+        Modality = modality;
+        StartDate = startDate;
+        EndDate = endDate;
+
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
+
+        // Load modalities for the dropdown
+        Modalities = await db.Studies
+            .IgnoreQueryFilters()
+            .Where(s => s.IsDeleted && !string.IsNullOrEmpty(s.Modality))
+            .Select(s => s.Modality)
+            .Distinct()
+            .OrderBy(m => m)
+            .ToListAsync();
 
         var query = db.Studies
             .IgnoreQueryFilters()
             .Include(s => s.Patient)
             .Where(s => s.IsDeleted)
-            .OrderByDescending(s => s.DeletedAt);
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.ToLower();
+            query = query.Where(s => s.Patient.Name.ToLower().Contains(q) || s.Patient.PatientId.ToLower().Contains(q));
+        }
+
+        if (!string.IsNullOrWhiteSpace(modality))
+        {
+            query = query.Where(s => s.Modality == modality);
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(s => s.StudyDate >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(s => s.StudyDate <= endDate.Value);
+        }
+
+        query = query.OrderByDescending(s => s.DeletedAt);
 
         var rawStudies = await query.ToListAsync();
 
@@ -49,6 +99,12 @@ public class RecycleBinModel : PageModel
             Status = s.Status,
             CreatedAt = s.DeletedAt ?? s.CreatedAt // Using CreatedAt to display DeletedAt time
         }).ToList();
+    }
+
+    public async Task<IActionResult> OnGetTableAsync(string? search, string? modality, DateTime? startDate, DateTime? endDate)
+    {
+        await OnGetAsync(search, modality, startDate, endDate);
+        return Partial("Shared/_RecycleBinTable", this);
     }
 
     public async Task<IActionResult> OnPostRestoreAsync(int id)
@@ -77,6 +133,7 @@ public class RecycleBinModel : PageModel
 
         var study = await db.Studies
             .IgnoreQueryFilters()
+            .AsSplitQuery()
             .Include(s => s.Patient)
             .Include(s => s.SeriesList)
                 .ThenInclude(series => series.Images)
