@@ -18,6 +18,7 @@ public class ClariMedDbContext : DbContext
     public DbSet<InboxDocument> InboxDocuments => Set<InboxDocument>();
     public DbSet<ClinicSettings> ClinicSettings => Set<ClinicSettings>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<DicomNode> DicomNodes => Set<DicomNode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

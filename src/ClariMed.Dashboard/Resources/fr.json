@@ -100,5 +100,14 @@
   "Settings_ConfirmDelete": "Êtes-vous sûr de vouloir supprimer cet utilisateur ?",
   "Settings_DefaultAdmin": "Admin par Défaut",
   "Settings_DefaultAdminProtected": "C'est le compte admin par défaut et il ne peut pas être modifié.",
-  "Settings_Save": "Enregistrer les modifications"
+  "Settings_Save": "Enregistrer les modifications",
+
+  "Settings_Machines": "Machines DICOM (Modalités)",
+  "Settings_MachinesDesc": "Configurez les nœuds DICOM externes (scanners, IRM, etc.) qui se connectent à ce serveur.",
+  "Settings_MachineName": "Nom de la Machine",
+  "Settings_MachineAETitle": "Titre AE",
+  "Settings_MachineIP": "Adresse IP",
+  "Settings_MachinePort": "Port",
+  "Settings_AddMachine": "Ajouter la Machine",
+  "Settings_NoMachines": "Aucune machine configurée."
 }

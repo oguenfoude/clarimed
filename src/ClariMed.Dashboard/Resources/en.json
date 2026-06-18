@@ -100,5 +100,14 @@
   "Settings_ConfirmDelete": "Are you sure you want to delete this user?",
   "Settings_DefaultAdmin": "Default Admin",
   "Settings_DefaultAdminProtected": "This is the default admin account and cannot be modified.",
-  "Settings_Save": "Save Changes"
+  "Settings_Save": "Save Changes",
+
+  "Settings_Machines": "DICOM Machines (Modalities)",
+  "Settings_MachinesDesc": "Configure external DICOM nodes (like CT, MRI scanners) that connect to this server.",
+  "Settings_MachineName": "Machine Name",
+  "Settings_MachineAETitle": "AE Title",
+  "Settings_MachineIP": "IP Address",
+  "Settings_MachinePort": "Port",
+  "Settings_AddMachine": "Add Machine",
+  "Settings_NoMachines": "No machines configured."
 }

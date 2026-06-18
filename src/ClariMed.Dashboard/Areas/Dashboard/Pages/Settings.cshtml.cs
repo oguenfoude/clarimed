@@ -16,6 +16,7 @@ public class SettingsModel : PageModel
     public string Lang { get; set; } = "en";
     public string ActiveSection { get; set; } = "general";
     public IReadOnlyList<User>? Users { get; set; }
+    public string LocalIpAddress { get; set; } = "127.0.0.1";
     public bool IsAdmin => User.IsInRole("Admin");
 
     public SettingsModel(IServiceScopeFactory scopeFactory)
@@ -30,6 +31,11 @@ public class SettingsModel : PageModel
         var repo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
         Settings = await repo.GetAsync();
         Lang = Settings?.Language ?? "en";
+
+        if (ActiveSection == "general")
+        {
+            LocalIpAddress = GetLocalIpAddress();
+        }
 
         if (ActiveSection == "users" && IsAdmin)
         {
@@ -49,6 +55,23 @@ public class SettingsModel : PageModel
         await repo.UpdateAsync(settings);
         Response.Headers["HX-Refresh"] = "true";
         return Content("");
+    }
+
+    private string GetLocalIpAddress()
+    {
+        try
+        {
+            var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+        }
+        catch { }
+        return "127.0.0.1";
     }
 
 

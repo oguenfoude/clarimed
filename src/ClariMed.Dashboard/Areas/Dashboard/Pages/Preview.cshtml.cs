@@ -150,28 +150,24 @@ public class PreviewModel : PageModel
                     page.PageColor(Colors.White);
 
                     int rows = (int)Math.Ceiling(request.ImagesPerPage / (double)request.ColumnsPerRow);
-                    float pageHeight = 841.89f; // A4 height in points
-                    float totalGapHeight = request.GapPx * (rows + 1); // Gap around all edges
-                    float rowHeight = (pageHeight - totalGapHeight) / rows;
-
                     page.Content().Padding(request.GapPx).Column(col =>
                     {
                         col.Spacing(request.GapPx);
                         
-                        for (int r = 0; r < batch.Count; r += request.ColumnsPerRow)
+                        for (int r = 0; r < rows; r++)
                         {
-                            var rowBatch = batch.Skip(r).Take(request.ColumnsPerRow).ToList();
+                            var rowBatch = batch.Skip(r * request.ColumnsPerRow).Take(request.ColumnsPerRow).ToList();
                             col.Item().Row(row =>
                             {
                                 row.Spacing(request.GapPx);
                                 foreach (var imgPath in rowBatch)
                                 {
                                     byte[] optimizedBytes = OptimizeImageForPdf(imgPath);
-                                    row.RelativeItem().Height(rowHeight).Background(QuestPDF.Helpers.Colors.Black).Image(optimizedBytes).FitArea();
+                                    row.RelativeItem().Image(optimizedBytes).FitWidth();
                                 }
                                 for (int pad = rowBatch.Count; pad < request.ColumnsPerRow; pad++)
                                 {
-                                    row.RelativeItem().Height(rowHeight);
+                                    row.RelativeItem();
                                 }
                             });
                         }
@@ -197,6 +193,21 @@ public class PreviewModel : PageModel
         if (!System.IO.File.Exists(path)) return NotFound();
         // Return inline to display in the iframe, DO NOT add the fileDownloadName parameter
         return PhysicalFile(path, "application/pdf");
+    }
+
+    public IActionResult OnGetThumbnail(string path, int size = 200)
+    {
+        if (string.IsNullOrEmpty(path)) return NotFound();
+        
+        var imagesDir = Path.GetFullPath(Path.Combine("data", "images"));
+        var rel = path.Replace("/dicom-images/", "").Replace("/", "\\").TrimStart('\\');
+        var absPath = Path.Combine(imagesDir, rel);
+
+        if (!System.IO.File.Exists(absPath))
+            return NotFound();
+
+        byte[] thumbnailBytes = GenerateThumbnailBytes(absPath, size);
+        return File(thumbnailBytes, "image/jpeg");
     }
 
     public async Task<IActionResult> OnGetCoverPdfAsync(int id)
@@ -280,19 +291,24 @@ public class PreviewModel : PageModel
 
     private byte[] OptimizeImageForPdf(string imagePath)
     {
+        return GenerateThumbnailBytes(imagePath, 800);
+    }
+
+    private byte[] GenerateThumbnailBytes(string imagePath, int maxSize)
+    {
         try
         {
             using var originalImage = System.Drawing.Image.FromFile(imagePath);
-            int maxWidth = 800;
-            int maxHeight = 800;
 
-            if (originalImage.Width <= maxWidth && originalImage.Height <= maxHeight)
+            if (originalImage.Width <= maxSize && originalImage.Height <= maxSize)
             {
-                return System.IO.File.ReadAllBytes(imagePath);
+                using var ms = new MemoryStream();
+                SaveAsJpeg(originalImage, ms);
+                return ms.ToArray();
             }
 
-            var ratioX = (double)maxWidth / originalImage.Width;
-            var ratioY = (double)maxHeight / originalImage.Height;
+            var ratioX = (double)maxSize / originalImage.Width;
+            var ratioY = (double)maxSize / originalImage.Height;
             var ratio = Math.Min(ratioX, ratioY);
 
             var newWidth = (int)(originalImage.Width * ratio);
@@ -300,32 +316,40 @@ public class PreviewModel : PageModel
 
             using var newImage = new Bitmap(newWidth, newHeight);
             using var graphics = Graphics.FromImage(newImage);
+            
+            // Fill background with white to prevent transparent issues when converting to JPEG
+            graphics.Clear(System.Drawing.Color.White);
+
             graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
             graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
             graphics.DrawImage(originalImage, 0, 0, newWidth, newHeight);
 
-            using var ms = new MemoryStream();
-            
-            // Save as JPEG to reduce size drastically compared to PNG
-            var jpegEncoder = ImageCodecInfo.GetImageDecoders().FirstOrDefault(c => c.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
-            if (jpegEncoder != null)
-            {
-                var encoderParams = new EncoderParameters(1);
-                encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 75L);
-                newImage.Save(ms, jpegEncoder, encoderParams);
-            }
-            else
-            {
-                newImage.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
-            }
-            
-            return ms.ToArray();
+            using var msOut = new MemoryStream();
+            SaveAsJpeg(newImage, msOut);
+            return msOut.ToArray();
         }
         catch
         {
             // Fallback if anything goes wrong
-            return System.IO.File.ReadAllBytes(imagePath);
+            if (System.IO.File.Exists(imagePath))
+                return System.IO.File.ReadAllBytes(imagePath);
+            return Array.Empty<byte>();
+        }
+    }
+
+    private void SaveAsJpeg(System.Drawing.Image img, MemoryStream ms)
+    {
+        var jpegEncoder = ImageCodecInfo.GetImageDecoders().FirstOrDefault(c => c.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+        if (jpegEncoder != null)
+        {
+            var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 75L);
+            img.Save(ms, jpegEncoder, encoderParams);
+        }
+        else
+        {
+            img.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
         }
     }
 }
