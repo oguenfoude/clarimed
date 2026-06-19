@@ -1,86 +1,111 @@
 using System;
 using Microsoft.Data.Sqlite;
 
-namespace Seeder
+namespace Seeder;
+
+class Program
 {
-    class Program
+    static void Main(string[] args)
     {
-        static void Main(string[] args)
+        Console.WriteLine("ClariMed Seeder - Injecting Fake Data...");
+        
+        string dbPath = @"D:\ClariMed\src\ClariMed.Worker\db\clarimed.db";
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+
+        try
         {
-            Console.WriteLine("Seeding 1000 fake patients and studies...");
-            string dbPath = @"D:\ClariMed\db\clarimed.db";
-            
-            using var connection = new SqliteConnection($"Data Source={dbPath}");
-            connection.Open();
-
-            using var transaction = connection.BeginTransaction();
-            
             var random = new Random();
-            var now = DateTime.UtcNow;
+            string[] firstNames = { "Jean", "Pierre", "Marie", "Sophie", "Luc", "Emma", "Thomas", "Julie", "Nicolas", "Camille" };
+            string[] lastNames = { "Dupont", "Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau" };
+            string[] modalities = { "CT", "MR", "US", "CR", "DX" };
+            string[] descriptions = { "CHEST", "BRAIN", "ABDOMEN", "PELVIS", "KNEE", "SPINE", "SHOULDER" };
 
-            using (var cmd = new SqliteCommand("SELECT name FROM sqlite_master WHERE type='table'", connection, transaction))
-            using (var reader = cmd.ExecuteReader())
+            int insertedPatients = 0;
+            int insertedStudies = 0;
+            int insertedSeries = 0;
+
+            for (int i = 0; i < 20; i++)
             {
-                while (reader.Read())
-                {
-                    Console.WriteLine("Table: " + reader.GetString(0));
-                }
-            }
+                // Generate Patient
+                string patientId = $"PAT-{random.Next(10000, 99999)}";
+                string name = $"{lastNames[random.Next(lastNames.Length)]}^{firstNames[random.Next(firstNames.Length)]}";
+                string birthDate = DateTime.Today.AddYears(-random.Next(20, 80)).ToString("yyyyMMdd");
+                string gender = random.Next(2) == 0 ? "M" : "F";
+                string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
-            for (int i = 1; i <= 1000; i++)
-            {
-                string patientId = $"PT-{10000 + i}";
-                string name = $"Fake Patient {i}";
-                string sex = i % 2 == 0 ? "M" : "F";
-                string birthDate = now.AddYears(-random.Next(20, 80)).ToString("yyyy-MM-dd");
-
-                // Insert Patient
-                string insertPatientSql = @"
+                using var cmdPatient = connection.CreateCommand();
+                cmdPatient.CommandText = @"
                     INSERT INTO Patients (PatientId, Name, BirthDate, Sex, CreatedAt)
-                    VALUES (@PatientId, @Name, @BirthDate, @Sex, @CreatedAt);
+                    VALUES (@pId, @name, @dob, @sex, @now);
                     SELECT last_insert_rowid();";
-                    
-                using var command = new SqliteCommand(insertPatientSql, connection, transaction);
-                command.Parameters.AddWithValue("@PatientId", patientId);
-                command.Parameters.AddWithValue("@Name", name);
-                command.Parameters.AddWithValue("@BirthDate", birthDate);
-                command.Parameters.AddWithValue("@Sex", sex);
-                command.Parameters.AddWithValue("@CreatedAt", now.ToString("yyyy-MM-dd HH:mm:ss"));
+                cmdPatient.Parameters.AddWithValue("@pId", patientId);
+                cmdPatient.Parameters.AddWithValue("@name", name);
+                cmdPatient.Parameters.AddWithValue("@dob", birthDate);
+                cmdPatient.Parameters.AddWithValue("@sex", gender);
+                cmdPatient.Parameters.AddWithValue("@now", now);
 
-                var patientRowId = Convert.ToInt64(command.ExecuteScalar());
+                long patientPk = (long)cmdPatient.ExecuteScalar();
+                insertedPatients++;
 
-                // Insert 1 Study for this Patient
-                string studyUid = Guid.NewGuid().ToString();
-                string accession = $"ACC-{20000 + i}";
-                string modality = i % 3 == 0 ? "CT" : (i % 2 == 0 ? "MRI" : "CR");
-                
-                string insertStudySql = @"
-                    INSERT INTO Studies (StudyInstanceUid, PatientId, AccessionNumber, StudyDate, StudyDescription, Modality, ReferringPhysicianName, InstitutionName, CreatedAt, Status, LastImageReceivedAt, ImageCount, IsDeleted)
-                    VALUES (@StudyInstanceUid, @PatientId, @AccessionNumber, @StudyDate, @StudyDescription, @Modality, @ReferringPhysicianName, @InstitutionName, @CreatedAt, 1, @LastImageReceivedAt, @ImageCount, 0);";
-                    
-                using var studyCmd = new SqliteCommand(insertStudySql, connection, transaction);
-                studyCmd.Parameters.AddWithValue("@StudyInstanceUid", studyUid);
-                studyCmd.Parameters.AddWithValue("@PatientId", patientRowId);
-                studyCmd.Parameters.AddWithValue("@AccessionNumber", accession);
-                studyCmd.Parameters.AddWithValue("@StudyDate", now.AddDays(-random.Next(0, 30)).ToString("yyyy-MM-dd HH:mm:ss"));
-                studyCmd.Parameters.AddWithValue("@StudyDescription", $"Fake Study for {modality}");
-                studyCmd.Parameters.AddWithValue("@Modality", modality);
-                studyCmd.Parameters.AddWithValue("@ReferringPhysicianName", "Dr. Fake");
-                studyCmd.Parameters.AddWithValue("@InstitutionName", "ClariMed Clinic");
-                studyCmd.Parameters.AddWithValue("@CreatedAt", now.ToString("yyyy-MM-dd HH:mm:ss"));
-                studyCmd.Parameters.AddWithValue("@LastImageReceivedAt", now.ToString("yyyy-MM-dd HH:mm:ss"));
-                studyCmd.Parameters.AddWithValue("@ImageCount", random.Next(1, 50));
-                
-                studyCmd.ExecuteNonQuery();
-                
-                if (i % 100 == 0)
+                // Generate 1-3 Studies per patient
+                int numStudies = random.Next(1, 4);
+                for (int j = 0; j < numStudies; j++)
                 {
-                    Console.WriteLine($"Inserted {i} patients...");
+                    string studyUid = $"1.2.826.0.1.3680043.2.135.{random.Next(10000, 99999)}.{DateTime.UtcNow.Ticks}";
+                    string studyDate = DateTime.Today.AddDays(-random.Next(0, 30)).ToString("yyyyMMdd");
+                    string modality = modalities[random.Next(modalities.Length)];
+                    string accession = $"ACC-{random.Next(100000, 999999)}";
+                    string desc = descriptions[random.Next(descriptions.Length)];
+
+                    using var cmdStudy = connection.CreateCommand();
+                    cmdStudy.CommandText = @"
+                        INSERT INTO Studies (StudyInstanceUid, StudyDate, Modality, AccessionNumber, StudyDescription, Status, IsDeleted, PatientId, CreatedAt, LastImageReceivedAt)
+                        VALUES (@uid, @date, @mod, @acc, @desc, 0, 0, @pid, @now, @now);
+                        SELECT last_insert_rowid();";
+                    cmdStudy.Parameters.AddWithValue("@uid", studyUid);
+                    cmdStudy.Parameters.AddWithValue("@date", studyDate);
+                    cmdStudy.Parameters.AddWithValue("@mod", modality);
+                    cmdStudy.Parameters.AddWithValue("@acc", accession);
+                    cmdStudy.Parameters.AddWithValue("@desc", desc);
+                    cmdStudy.Parameters.AddWithValue("@pid", patientPk);
+                    cmdStudy.Parameters.AddWithValue("@now", now);
+
+                    long studyPk = (long)cmdStudy.ExecuteScalar();
+                    insertedStudies++;
+
+                    // Generate 1-5 Series per study
+                    int numSeries = random.Next(1, 6);
+                    for (int k = 0; k < numSeries; k++)
+                    {
+                        string seriesUid = $"{studyUid}.{k + 1}";
+                        using var cmdSeries = connection.CreateCommand();
+                        cmdSeries.CommandText = @"
+                            INSERT INTO Series (SeriesInstanceUid, SeriesNumber, Modality, SeriesDescription, StudyId, CreatedAt)
+                            VALUES (@uid, @num, @mod, @desc, @sid, @now);";
+                        cmdSeries.Parameters.AddWithValue("@uid", seriesUid);
+                        cmdSeries.Parameters.AddWithValue("@num", k + 1);
+                        cmdSeries.Parameters.AddWithValue("@mod", modality);
+                        cmdSeries.Parameters.AddWithValue("@desc", $"Series {k + 1}");
+                        cmdSeries.Parameters.AddWithValue("@sid", studyPk);
+                        cmdSeries.Parameters.AddWithValue("@now", now);
+
+                        cmdSeries.ExecuteNonQuery();
+                        insertedSeries++;
+                    }
                 }
             }
-            
+
             transaction.Commit();
-            Console.WriteLine("Successfully inserted 1000 fake patients and studies.");
+            Console.WriteLine("Fake data injected successfully!");
+            Console.WriteLine($"Added: {insertedPatients} Patients, {insertedStudies} Studies, {insertedSeries} Series.");
+        }
+        catch (Exception ex)
+        {
+            transaction.Rollback();
+            Console.WriteLine($"Error: {ex.Message}");
         }
     }
 }

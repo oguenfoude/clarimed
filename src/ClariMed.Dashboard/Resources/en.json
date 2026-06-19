@@ -102,12 +102,12 @@
   "Settings_DefaultAdminProtected": "This is the default admin account and cannot be modified.",
   "Settings_Save": "Save Changes",
 
-  "Settings_Machines": "DICOM Machines (Modalities)",
-  "Settings_MachinesDesc": "Configure external DICOM nodes (like CT, MRI scanners) that connect to this server.",
+  "Settings_Machines": "Modality Connection Information",
+  "Settings_MachinesDesc": "Enter this server's information into your modalities (CT, MRI, etc.) so they can connect and send DICOM studies.",
   "Settings_MachineName": "Machine Name",
-  "Settings_MachineAETitle": "AE Title",
-  "Settings_MachineIP": "IP Address",
-  "Settings_MachinePort": "Port",
+  "Settings_MachineAETitle": "Server AE Title",
+  "Settings_MachineIP": "Server IP Address",
+  "Settings_MachinePort": "Server Port",
   "Settings_AddMachine": "Add Machine",
   "Settings_NoMachines": "No machines configured."
 }

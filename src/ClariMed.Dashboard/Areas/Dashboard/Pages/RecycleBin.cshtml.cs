@@ -18,13 +18,9 @@ public class RecycleBinModel : PageModel
     private readonly IServiceScopeFactory _scopeFactory;
 
     public List<StudyRow> DeletedStudies { get; set; } = new();
-    public List<string> Modalities { get; set; } = new();
 
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
-
-    [BindProperty(SupportsGet = true)]
-    public string? Modality { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public DateTime? StartDate { get; set; }
@@ -37,24 +33,14 @@ public class RecycleBinModel : PageModel
         _scopeFactory = scopeFactory;
     }
 
-    public async Task OnGetAsync(string? search, string? modality, DateTime? startDate, DateTime? endDate)
+    public async Task OnGetAsync(string? search, DateTime? startDate, DateTime? endDate)
     {
         Search = search;
-        Modality = modality;
         StartDate = startDate;
         EndDate = endDate;
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
-
-        // Load modalities for the dropdown
-        Modalities = await db.Studies
-            .IgnoreQueryFilters()
-            .Where(s => s.IsDeleted && !string.IsNullOrEmpty(s.Modality))
-            .Select(s => s.Modality)
-            .Distinct()
-            .OrderBy(m => m)
-            .ToListAsync();
 
         var query = db.Studies
             .IgnoreQueryFilters()
@@ -66,11 +52,6 @@ public class RecycleBinModel : PageModel
         {
             var q = search.ToLower();
             query = query.Where(s => s.Patient.Name.ToLower().Contains(q) || s.Patient.PatientId.ToLower().Contains(q));
-        }
-
-        if (!string.IsNullOrWhiteSpace(modality))
-        {
-            query = query.Where(s => s.Modality == modality);
         }
 
         if (startDate.HasValue)
@@ -101,9 +82,9 @@ public class RecycleBinModel : PageModel
         }).ToList();
     }
 
-    public async Task<IActionResult> OnGetTableAsync(string? search, string? modality, DateTime? startDate, DateTime? endDate)
+    public async Task<IActionResult> OnGetTableAsync(string? search, DateTime? startDate, DateTime? endDate)
     {
-        await OnGetAsync(search, modality, startDate, endDate);
+        await OnGetAsync(search, startDate, endDate);
         return Partial("Shared/_RecycleBinTable", this);
     }
 
@@ -170,16 +151,6 @@ public class RecycleBinModel : PageModel
             if (!string.IsNullOrEmpty(doc.PdfFilePath) && System.IO.File.Exists(doc.PdfFilePath))
             {
                 try { System.IO.File.Delete(doc.PdfFilePath); } catch { /* ignore */ }
-            }
-        }
-
-        // 3. Delete linked InboxDocument PDFs (if any)
-        var inboxDocs = await db.InboxDocuments.Where(d => d.AssignedToStudyId == id).ToListAsync();
-        foreach (var doc in inboxDocs)
-        {
-            if (!string.IsNullOrEmpty(doc.PdfPath) && System.IO.File.Exists(doc.PdfPath))
-            {
-                try { System.IO.File.Delete(doc.PdfPath); } catch { /* ignore */ }
             }
         }
 

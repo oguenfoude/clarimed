@@ -9,7 +9,6 @@ using ClariMed.Dicom;
 using ClariMed.Documents;
 using ClariMed.Imaging;
 using ClariMed.Printing;
-using ClariMed.VirtualPrinter;
 using ClariMed.Worker.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -59,14 +58,12 @@ builder.Services.AddClariMedImaging();
 builder.Services.AddClariMedDicom();
 builder.Services.AddClariMedDocuments();
 builder.Services.AddClariMedPrinting();
-builder.Services.AddClariMedVirtualPrinter();
 
 // ── Register Background Workers ──
 builder.Services.AddHostedService<DicomListenerService>();
 builder.Services.AddHostedService<DocumentProcessingService>();
 builder.Services.AddHostedService<DocumentWatcherService>();
 builder.Services.AddHostedService<StudyCompletionService>();
-builder.Services.AddHostedService<VirtualPrinterService>();
 builder.Services.AddHostedService<RecycleBinCleanupService>();
 builder.Services.AddHostedService<DicomRestartService>();
 
@@ -132,15 +129,6 @@ app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(imagesPath),
     RequestPath = "/dicom-images"
-});
-
-// Serve Inbox PDF documents (Virtual Printer)
-var inboxPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "inbox");
-Directory.CreateDirectory(inboxPath);
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(inboxPath),
-    RequestPath = "/inbox-docs"
 });
 
 // Serve generated reports/documents

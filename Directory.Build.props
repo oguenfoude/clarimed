@@ -14,6 +14,8 @@
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-g85r-6x2q-45w7" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-qxrv-gp6x-rc23" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rxmq-m78w-7wmc" />
+    <!-- SQLitePCLRaw.lib.e_sqlite3 vulnerability suppression -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
   </ItemGroup>
 
 </Project>

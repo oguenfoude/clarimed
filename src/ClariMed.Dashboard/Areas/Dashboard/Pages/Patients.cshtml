@@ -4,92 +4,124 @@
     ViewData["Title"] = "Patients";
 }
 
-
-
 <!-- Filter Bar -->
-<div class="bg-white rounded-2xl border border-slate-200/60 p-5 mb-8 flex flex-wrap gap-4 items-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] sticky top-6 z-20">
-    <!-- Search Input -->
-    <div class="relative flex-1 min-w-[240px]">
-        <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 pointer-events-none">
-            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div class="mb-6 flex flex-wrap gap-3 items-center">
+        <!-- Single Search Field -->
+        <div class="relative flex-1 min-w-[220px]">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
-        </span>
-        <input type="text" name="search" id="pt-search" placeholder="@Loc["Patients_SearchPlaceholder"]"
-               class="pl-11 pr-4 py-3 w-full bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:font-medium placeholder:text-slate-400"
-               hx-get="/patients?handler=Table"
-               hx-trigger="keyup changed delay:300ms"
-               hx-target="#patients-table"
-               hx-swap="outerHTML"
-               hx-include="#pt-search,#pt-modality,#pt-status,#pt-date-start,#pt-date-end" />
+            <input type="text" name="search" id="pt-search"
+                   placeholder="Search patient, ID, accession..."
+                   class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-slate-400"
+                   hx-get="/patients?handler=Table"
+                   hx-trigger="keyup changed delay:350ms"
+                   hx-target="#patients-table"
+                   hx-swap="outerHTML"
+                   hx-include="#pt-search,#pt-date-start,#pt-date-end" />
+        </div>
+
+        <!-- Date Range -->
+        <div class="flex items-center gap-2 shrink-0">
+            <input type="date" name="startDate" id="pt-date-start" value="@Model.StartDate"
+                   class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all cursor-pointer"
+                   hx-get="/patients?handler=Table"
+                   hx-trigger="change"
+                   hx-target="#patients-table"
+                   hx-swap="outerHTML"
+                   hx-include="#pt-search,#pt-date-start,#pt-date-end" />
+            <span class="text-xs text-slate-400 font-medium">–</span>
+            <input type="date" name="endDate" id="pt-date-end" value="@Model.EndDate"
+                   class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all cursor-pointer"
+                   hx-get="/patients?handler=Table"
+                   hx-trigger="change"
+                   hx-target="#patients-table"
+                   hx-swap="outerHTML"
+                   hx-include="#pt-search,#pt-date-start,#pt-date-end" />
+        </div>
+
+        <!-- Clear Button -->
+        <button type="button" title="Clear filters"
+                class="p-2.5 text-slate-400 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-all shrink-0"
+                onclick="clearPatientsFilters();">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
     </div>
 
-    <div class="h-10 w-px bg-slate-200 hidden md:block"></div>
-
-    <!-- Modality Dropdown -->
-    <select name="modality" id="pt-modality"
-            class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-            hx-get="/patients?handler=Table"
-            hx-trigger="change"
-            hx-target="#patients-table"
-            hx-swap="outerHTML"
-            hx-include="#pt-search,#pt-modality,#pt-status,#pt-date-start,#pt-date-end">
-        <option value="">@Loc["Patients_Filter"] / Modality</option>
-        @foreach (var m in Model.Modalities)
-        {
-            <option value="@m">@m</option>
-        }
-    </select>
-
-    <!-- Status Dropdown -->
-    <select name="status" id="pt-status"
-            class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-            hx-get="/patients?handler=Table"
-            hx-trigger="change"
-            hx-target="#patients-table"
-            hx-swap="outerHTML"
-            hx-include="#pt-search,#pt-modality,#pt-status,#pt-date-start,#pt-date-end">
-        <option value="">All Statuses</option>
-        <option value="Receiving">Receiving</option>
-        <option value="Complete">Complete</option>
-    </select>
-
-    <!-- Date Range Picker -->
-    <div class="flex items-center gap-2">
-        <input type="date" name="startDate" id="pt-date-start"
-               class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-               hx-get="/patients?handler=Table"
-               hx-trigger="change"
-               hx-target="#patients-table"
-               hx-swap="outerHTML"
-               hx-include="#pt-search,#pt-modality,#pt-status,#pt-date-start,#pt-date-end" />
-               
-        <span class="text-sm font-medium text-slate-400">to</span>
-        
-        <input type="date" name="endDate" id="pt-date-end"
-               class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-               hx-get="/patients?handler=Table"
-               hx-trigger="change"
-               hx-target="#patients-table"
-               hx-swap="outerHTML"
-               hx-include="#pt-search,#pt-modality,#pt-status,#pt-date-start,#pt-date-end" />
-    </div>
-
-    <div class="h-10 w-px bg-slate-200 hidden md:block"></div>
-
-    <!-- Clear Button -->
-    <button type="button"
-            class="px-5 py-3 text-sm font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all whitespace-nowrap focus:ring-4 focus:ring-rose-500/20"
-            onclick="document.getElementById('pt-search').value='';document.getElementById('pt-modality').value='';document.getElementById('pt-status').value='';document.getElementById('pt-date-start').value='';document.getElementById('pt-date-end').value='';"
-            hx-get="/patients?handler=Table"
-            hx-trigger="click"
-            hx-target="#patients-table"
-            hx-swap="outerHTML">
-        Clear Filters
-    </button>
-</div>
-
-<!-- Patients Table Container -->
-<div id="patients-table">
+<!-- Table -->
+<div id="patients-table" class="mt-4">
     <partial name="Shared/_PatientsTable" model="Model" />
 </div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const search = document.getElementById('pt-search');
+            const start = document.getElementById('pt-date-start');
+            const end = document.getElementById('pt-date-end');
+
+            // Restore from sessionStorage if no query params exist
+            if (!window.location.search) {
+                let restored = false;
+                let searchRestored = false;
+                let datesRestored = false;
+
+                if (sessionStorage.getItem('pt-search') !== null && sessionStorage.getItem('pt-search') !== '') {
+                    search.value = sessionStorage.getItem('pt-search');
+                    searchRestored = true;
+                    restored = true;
+                }
+                if (sessionStorage.getItem('pt-start') !== null && sessionStorage.getItem('pt-start') !== start.value) {
+                    start.value = sessionStorage.getItem('pt-start');
+                    datesRestored = true;
+                    restored = true;
+                }
+                if (sessionStorage.getItem('pt-end') !== null && sessionStorage.getItem('pt-end') !== end.value) {
+                    end.value = sessionStorage.getItem('pt-end');
+                    datesRestored = true;
+                    restored = true;
+                }
+                
+                if (restored && typeof htmx !== 'undefined') {
+                    if (searchRestored) {
+                        // Force HTMX to see it as changed and trigger keyup
+                        htmx.trigger(search, 'keyup');
+                    } else if (datesRestored) {
+                        htmx.trigger(start, 'change');
+                    }
+                }
+            }
+
+            // Save state on change
+            search.addEventListener('input', () => sessionStorage.setItem('pt-search', search.value));
+            start.addEventListener('change', () => sessionStorage.setItem('pt-start', start.value));
+            end.addEventListener('change', () => sessionStorage.setItem('pt-end', end.value));
+
+            // Prevent default form submission when pressing Enter in search field
+            search.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // trigger keyup immediately to bypass delay if user hits Enter
+                    htmx.trigger(search, 'keyup');
+                }
+            });
+        });
+
+        function clearPatientsFilters() {
+            const search = document.getElementById('pt-search');
+            const start = document.getElementById('pt-date-start');
+            const end = document.getElementById('pt-date-end');
+            search.value = '';
+            start.value = '';
+            end.value = '';
+            sessionStorage.removeItem('pt-search');
+            sessionStorage.removeItem('pt-start');
+            sessionStorage.removeItem('pt-end');
+            if (typeof htmx !== 'undefined') {
+                htmx.trigger(search, 'keyup');
+            }
+        }
+    </script>
+}

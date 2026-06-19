@@ -273,38 +273,160 @@ erDiagram
 
 ## Settings Dashboard
 
-The Settings page (`/settings`) has 5 HTMX-switched sections:
+The Settings page (`/settings`) is a tabbed HTMX-driven interface with a left sidebar and right content area. It uses a single `SettingsModel` PageModel (`Settings.cshtml.cs`) with partial views for each section. All text is localized via `ILocalizationService` (`@Loc["..."]` tag helper) with English (`en.json`) and French (`fr.json`) translation files. The entire class is decorated with `[IgnoreAntiforgeryToken]` for HTMX form compatibility. Global `[Authorize]` (from `_ViewImports.cshtml`) requires login; the Users section is further gated by `IsAdmin`.
 
-### 1. General
-- Language selector (English / French)
+### Settings Code-Behind (`SettingsModel`)
 
-### 2. Clinic Info
-- **Clinic Name** — displayed on cover pages and reports
-- **Report Notes** — medical text shown between cover page and images
+The PageModel at `Settings.cshtml.cs` creates a scoped DI resolution per request via `IServiceScopeFactory`. It resolves two repositories:
 
-### 3. DICOM Settings
-- **Server Status** — live indicator (Active / Restart pending)
-- **AE Title** — DICOM Application Entity title (must match modality config)
-- **DICOM Port** — TCP port for C-STORE connections (default: 104)
-- Changes auto-restart the server when idle (no receiving studies)
+- **`IClinicSettingsRepository`** — singleton settings row (`ClinicSettings` entity); auto-seeds default row on first access if none exists.
+- **`IUserRepository`** — CRUD for `User` entities with BCrypt password hashing.
 
-### 4. File Paths
-- **Archive Path** — root path for raw `.dcm` storage
-- **Watch Folder Path** — folder monitored for `.docx` files
+Key public properties exposed to the Razor view:
 
-### 5. User Management (Admin only)
-- Table of all users with role, status, and actions
-- Add user form with username, display name, password, role
-- Activate/deactivate/delete actions per user
+| Property | Type | Default | Purpose |
+|---|---|---|---|
+| `Settings` | `ClinicSettings?` | `null` | Full settings object loaded from DB |
+| `Lang` | `string` | `"en"` | Current language code (extracted from `Settings.Language`) |
+| `ActiveSection` | `string` | `"general"` | Which tab is active: `general`, `dicom`, or `users` |
+| `Users` | `IReadOnlyList<User>?` | `null` | All users (loaded only for the `users` section) |
+| `LocalIpAddress` | `string` | `"127.0.0.1"` | Server's local IPv4 (resolved via `Dns.GetHostEntry`) |
+| `IsAdmin` | `bool` | computed | `true` if current user has the `"Admin"` role |
 
-### DICOM Auto-Restart
+### Settings Page Handlers
 
-When an admin changes AE Title or port:
-1. Settings save to DB with `DicomSettingsPendingRestart = true`
-2. `DicomRestartService` polls every 5 seconds
-3. Waits for all studies to leave `Receiving` status (no active data flow)
-4. Stops the DICOM server, restarts with new settings
-5. Clears the pending flag
+#### GET Handlers
+
+| Handler | Purpose |
+|---|---|
+| `OnGetAsync(section?)` | Main page load. Sets `ActiveSection` from query string (defaults `"general"`). Loads `ClinicSettings` from DB. For the General section, resolves the local IPv4 address. For the Users section (admin only), loads all users. |
+| `OnGetDicomStatusAsync()` | HTMX polling endpoint. Returns an amber badge ("Restart pending...") if `DicomSettingsPendingRestart == true`, otherwise a green "Active" badge. Polled by the DICOM section every 3 seconds. |
+
+#### POST Handlers
+
+| Handler | Purpose |
+|---|---|
+| `OnPostLanguageAsync()` | Saves language (`"en"` / `"fr"`) to `ClinicSettings.Language`. Sets `HX-Refresh` header to trigger full page reload via HTMX. |
+| `OnPostDicomAsync()` | Saves new AE Title and DICOM port to `ClinicSettings`. Sets `DicomSettingsPendingRestart = true`. Returns an inline amber status message. Port is validated as `int > 0`; AE Title must be non-empty. |
+| `OnPostAddUserAsync()` | Creates a new user (Admin only). Validates: username, display name, and password required; password >= 6 chars; username must be unique. Hashes password with BCrypt. Returns `_UsersTable` partial for HTMX swap. |
+| `OnPostToggleUserAsync(userId)` | Toggles `IsActive` on a user (Admin only). The default `"admin"` account is protected — cannot be deactivated. Returns updated `_UsersTable` partial. |
+| `OnPostDeleteUserAsync(userId)` | Deletes a user (Admin only). The default `"admin"` account is protected — cannot be deleted. Returns updated `_UsersTable` partial. |
+| `OnPostChangePasswordAsync(userId)` | Changes a user's password (Admin only). Validates min 6 chars. Directly sets `PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword)` on the entity. Returns inline success/failure message. |
+
+#### Private Helper
+
+| Method | Purpose |
+|---|---|
+| `GetLocalIpAddress()` | Resolves the machine's hostname via `Dns.GetHostEntry()`, iterates addresses looking for the first IPv4 (`AddressFamily.InterNetwork`). Falls back to `"127.0.0.1"` on failure. |
+
+### Settings Page Sections
+
+The page uses `?section=` query parameters and a left sidebar nav to switch between three partial views:
+
+#### 1. General (`_SettingsGeneral.cshtml`)
+- **Language selector** — A `<select>` form that POSTs to `?handler=Language`. Choices: English (US), Francais.
+- **Machines (DICOM Modalities) info card** — Read-only display of the local IP, AE Title, and DICOM port. This is informational for configuring CT/MRI machines to push to ClariMed.
+
+#### 2. DICOM (`_SettingsDicom.cshtml`)
+- **Server Status** — HTMX-polled live indicator (`hx-get="/settings?handler=DicomStatus" hx-trigger="every 3s"`). Shows Active (green) or Restart pending (amber with pulse animation).
+- **AE Title** — Text input, current value from `Settings.AETitle`.
+- **DICOM Port** — Number input (1–65535), current value from `Settings.DicomPort`.
+- **Amber warning** — "Changing AE Title or port requires a server restart. The server will restart automatically when idle (no studies being received)."
+- **Apply & Restart button** — Submits form via HTMX; result shown in `#dicom-result`.
+
+#### 3. User Management — Admin Only (`_SettingsUsers.cshtml`)
+- **Add User form** — POSTs to `?handler=AddUser`. Fields: Username, Display Name, Password (min 6), Role (User/Admin dropdown). HTMX swaps `#users-table`.
+- **Users Table** (`_UsersTable.cshtml`) — Renders a table with columns:
+  - **Username** — plain text
+  - **Display Name** — plain text
+  - **Role** — Blue badge for Admin, grey badge for User
+  - **Status** — Green dot + "Active" or grey dot + "Inactive"
+  - **Actions**:
+    - Default `"admin"` account: Shows a shield icon with "Default Admin" label — no actions available.
+    - Other users: Toggle Active/Inactive button (POST to `?handler=ToggleUser`) and Delete button (POST to `?handler=DeleteUser` with `hx-confirm` confirmation dialog). Both HTMX-swap `#users-table`.
+
+### DICOM Auto-Restart Flow
+
+When an admin changes AE Title or port in the Dashboard:
+
+1. `OnPostDicomAsync()` saves settings to DB with `DicomSettingsPendingRestart = true`
+2. `DicomRestartService` (background service) polls every 5 seconds
+3. Checks if any studies have `Status == StudyStatus.Receiving` — if yes, waits (does not restart during active data flow)
+4. When safe (no receiving studies), calls `IDicomServer.StopAsync()` then `StartAsync(newAeTitle, newPort)`
+5. Sets `DicomSettingsPendingRestart = false` and saves to DB
+6. Dashboard UI polls `OnGetDicomStatusAsync()` every 3 seconds to show the user whether restart is pending or complete
+
+```
+Admin saves DICOM settings in Dashboard
+  → OnPostDicomAsync() sets DicomSettingsPendingRestart = true
+  → DicomRestartService polls every 5s, detects flag
+  → Waits for no active receiving studies
+  → Restarts IDicomServer with new AE Title + port
+  → Clears DicomSettingsPendingRestart flag
+  → Dashboard UI polls OnGetDicomStatusAsync() every 3s to show status
+```
+
+### ClinicSettings Data Model
+
+The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded on first access):
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `Id` | `int` | auto | Primary key |
+| `ClinicName` | `string` | `"ClariMed Clinic"` | Displayed on cover pages and reports |
+| `AETitle` | `string` | `"CLARIMED"` | DICOM Application Entity Title |
+| `DicomPort` | `int` | `104` | TCP port for C-STORE connections |
+| `ArchivePath` | `string` | `"archive"` | Root path for raw `.dcm` storage |
+| `DatabasePath` | `string` | `"db/clarimed.db"` | Path to SQLite database |
+| `ArchiveIntervalMonths` | `int` | `3` | Archive interval in months |
+| `WatchFolderPath` | `string` | `@"C:\ClariMed\WatchFolder"` | Folder monitored for `.docx` files |
+| `Language` | `string` | `"en"` | UI language (`"en"` or `"fr"`) |
+| `ResumeText` | `string` | `""` | Medical text shown between cover page and images |
+| `PrinterRegistered` | `bool` | `false` | Whether the virtual printer has been registered |
+| `DicomSettingsPendingRestart` | `bool` | `false` | Flag for DICOM auto-restart flow |
+| `UpdatedAt` | `DateTime` | `UtcNow` | Timestamp of last update |
+
+### User Data Model
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `Id` | `int` | auto | Primary key |
+| `Username` | `string` | `""` | Unique index enforced |
+| `DisplayName` | `string` | `""` | Friendly name |
+| `PasswordHash` | `string` | `""` | BCrypt-hashed password |
+| `Role` | `UserRole` | `UserRole.User` | Enum: `Admin = 0`, `User = 1` |
+| `IsActive` | `bool` | `true` | Whether the account can log in |
+| `CreatedAt` | `DateTime` | `UtcNow` | Account creation timestamp |
+
+### How Background Services Consume Settings
+
+| Service | Setting Used | How |
+|---|---|---|
+| `DicomListenerService` | `AETitle`, `DicomPort` | On startup: reads `appsettings.json` first, then overrides with DB values if available. Calls `IDicomServer.StartAsync(aeTitle, port)`. |
+| `DicomRestartService` | `DicomSettingsPendingRestart`, `AETitle`, `DicomPort` | Polls DB every 5s. When flag is true and no studies are receiving, stops and restarts the DICOM server with new settings. Clears the flag. |
+| `VirtualPrinterService` | `WatchFolderPath` | Reads at startup to configure `FileSystemWatcher` for `VirtualPrint.pdf`. |
+
+### Settings Files Reference
+
+| File | Path |
+|---|---|
+| PageModel (code-behind) | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml.cs` |
+| Razor view | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml` |
+| General partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsGeneral.cshtml` |
+| DICOM partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsDicom.cshtml` |
+| Users partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsUsers.cshtml` |
+| Users table partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_UsersTable.cshtml` |
+| ClinicSettings model | `src/ClariMed.Data/Models/ClinicSettings.cs` |
+| IClinicSettingsRepository | `src/ClariMed.Data/Services/IClinicSettingsRepository.cs` |
+| ClinicSettingsRepository | `src/ClariMed.Data/Services/ClinicSettingsRepository.cs` |
+| User model | `src/ClariMed.Data/Models/User.cs` |
+| UserRole enum | `src/ClariMed.Data/Models/UserRole.cs` |
+| IUserRepository | `src/ClariMed.Data/Services/IUserRepository.cs` |
+| UserRepository | `src/ClariMed.Data/Services/UserRepository.cs` |
+| DicomListenerService | `src/ClariMed.Worker/Services/DicomListenerService.cs` |
+| DicomRestartService | `src/ClariMed.Worker/Services/DicomRestartService.cs` |
+| English translations | `src/ClariMed.Dashboard/Resources/en.json` |
+| French translations | `src/ClariMed.Dashboard/Resources/fr.json` |
 
 ---
 
@@ -384,6 +506,16 @@ PRAGMA foreign_keys = ON;
 | `ClinicSettings` | Singleton config row (auto-seeded) |
 | `Users` | Auth users with BCrypt-hashed passwords |
 
+### Performance Indexes
+
+To ensure the system scales efficiently under large DICOM workloads, database indexes are defined on critical search, filter, and sorting columns:
+- **`Patient`**: `PatientId` (index), `Name` (index)
+- **`Study`**: `StudyInstanceUid` (unique index), `StudyDate` (index), `Modality` (index), `Status` (index), `IsDeleted` (index), `AccessionNumber` (index), `CreatedAt` (index), `DeletedAt` (index)
+- **`Series`**: `SeriesInstanceUid` (unique index)
+- **`DicomImage`**: `SopInstanceUid` (unique index)
+- **`Document`**: `Status` (index), `ReceivedAt` (index), `StudyId` (index)
+- **`User`**: `Username` (unique index)
+
 ### Migrations
 
 ```bash
@@ -423,10 +555,14 @@ dotnet watch run --project src\ClariMed.Worker
 
 ---
 
-## Core Optimizations
+## Core Optimizations & UI Enhancements
 
-1. **File Locks during `dotnet watch`** — `<UseAppHost>false</UseAppHost>` prevents DLL lock errors.
-2. **Stable Directory Hashing (FNV-1a)** — Deterministic folder names survive process restarts.
+1. **File Locks during `dotnet watch`** — `<UseAppHost>false</UseAppHost>` prevents DLL lock errors on `pdfium.dll` during live development.
+2. **Stable Directory Hashing (FNV-1a)** — Deterministic folder names survive database/process restarts.
 3. **Hyper-Fast PDF Generation** — Server-side image resizing + JPEG compression at 75% quality. PDFs compile in < 2 seconds.
 4. **Zero Thumbnail 404 Errors** — Preview sidebar loads optimized PNGs directly.
 5. **Assignment Workflow** — Linking a Virtual Printer PDF redirects directly to the study preview.
+6. **Unified Search & Filtering** — Filter bars in Patients and Recycle Bin offer a single, powerful search field for Patient Name, Patient ID, and Accession Number, coupled with start and end date ranges.
+7. **Filter State Preservation** — Filters are stored in `sessionStorage` and restored automatically when navigating back to the page. HTMX updates the lists dynamically via triggered events upon restoration.
+8. **Page Reload Prevention** — JavaScript interceptors prevent full page reloads and resets when the `Enter` key is pressed inside search inputs, resolving HTMX interaction issues.
+9. **Scrollable Filters** — Filter bars scroll natively with the page content for a cleaner, non-intrusive viewing experience.

@@ -16,7 +16,7 @@ public class SettingsModel : PageModel
     public string Lang { get; set; } = "en";
     public string ActiveSection { get; set; } = "general";
     public IReadOnlyList<User>? Users { get; set; }
-    public string LocalIpAddress { get; set; } = "127.0.0.1";
+    public List<string> LocalIpAddresses { get; set; } = new();
     public bool IsAdmin => User.IsInRole("Admin");
 
     public SettingsModel(IServiceScopeFactory scopeFactory)
@@ -32,9 +32,40 @@ public class SettingsModel : PageModel
         Settings = await repo.GetAsync();
         Lang = Settings?.Language ?? "en";
 
-        if (ActiveSection == "general")
+        if (ActiveSection == "general" || ActiveSection == "dicom")
         {
-            LocalIpAddress = GetLocalIpAddress();
+            try
+            {
+                var ips = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(ni => ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && 
+                                 ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                    .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
+                    .Where(ua => ua.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    .Select(ua => ua.Address.ToString())
+                    .ToList();
+
+                if (ips.Any())
+                {
+                    LocalIpAddresses = ips;
+                }
+                else
+                {
+                    var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
+                    LocalIpAddresses = host.AddressList
+                        .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        .Select(a => a.ToString())
+                        .ToList();
+                }
+            }
+            catch
+            {
+                LocalIpAddresses.Add("127.0.0.1");
+            }
+
+            if (!LocalIpAddresses.Any())
+            {
+                LocalIpAddresses.Add("127.0.0.1");
+            }
         }
 
         if (ActiveSection == "users" && IsAdmin)
@@ -56,25 +87,6 @@ public class SettingsModel : PageModel
         Response.Headers["HX-Refresh"] = "true";
         return Content("");
     }
-
-    private string GetLocalIpAddress()
-    {
-        try
-        {
-            var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
-            foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
-        }
-        catch { }
-        return "127.0.0.1";
-    }
-
-
 
     // ── DICOM Settings ──
     public async Task<IActionResult> OnPostDicomAsync()

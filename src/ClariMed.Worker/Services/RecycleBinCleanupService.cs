@@ -94,16 +94,6 @@ public class RecycleBinCleanupService : BackgroundService
                 }
             }
 
-            // 3. Delete linked InboxDocument PDFs
-            var inboxDocs = await db.InboxDocuments.Where(d => d.AssignedToStudyId == study.Id).ToListAsync(stoppingToken);
-            foreach (var doc in inboxDocs)
-            {
-                if (!string.IsNullOrEmpty(doc.PdfPath) && System.IO.File.Exists(doc.PdfPath))
-                {
-                    try { System.IO.File.Delete(doc.PdfPath); } catch { /* ignore */ }
-                }
-            }
-
             db.Studies.Remove(study);
         }
 

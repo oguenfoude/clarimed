@@ -40,3 +40,37 @@
         <span id="dicom-result" class="text-sm font-bold"></span>
     </div>
 </form>
+
+<div class="mt-12 mb-10">
+    <h2 class="text-lg font-black text-slate-800 mb-4 tracking-tight">@Loc["Settings_Machines"]</h2>
+    <p class="text-xs text-slate-500 mb-4 font-medium">@Loc["Settings_MachinesDesc"]</p>
+    
+    <div class="bg-blue-50 rounded-2xl border border-blue-200 p-6 shadow-sm">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <label class="block text-xs font-black text-blue-800 mb-1 uppercase tracking-wide">@Loc["Settings_MachineIP"]</label>
+                <div class="space-y-1">
+                    @if (Model.LocalIpAddresses != null && Model.LocalIpAddresses.Any())
+                    {
+                        foreach (var ip in Model.LocalIpAddresses)
+                        {
+                            <div class="text-sm font-bold text-slate-800 font-mono bg-white px-3 py-1.5 rounded-lg border border-blue-100 inline-block shadow-sm">@ip</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-sm font-bold text-slate-800 font-mono bg-white px-3 py-1.5 rounded-lg border border-blue-100 inline-block shadow-sm">127.0.0.1</div>
+                    }
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-black text-blue-800 mb-1 uppercase tracking-wide">@Loc["Settings_MachineAETitle"]</label>
+                <div class="text-sm font-bold text-slate-800 font-mono bg-white px-3 py-1.5 rounded-lg border border-blue-100 inline-block shadow-sm">@(Model.Settings?.AETitle ?? "CLARIMED")</div>
+            </div>
+            <div>
+                <label class="block text-xs font-black text-blue-800 mb-1 uppercase tracking-wide">@Loc["Settings_MachinePort"]</label>
+                <div class="text-sm font-bold text-slate-800 font-mono bg-white px-3 py-1.5 rounded-lg border border-blue-100 inline-block shadow-sm">@(Model.Settings?.DicomPort ?? 104)</div>
+            </div>
+        </div>
+    </div>
+</div>

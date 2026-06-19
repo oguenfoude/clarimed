@@ -15,10 +15,8 @@ public class ClariMedDbContext : DbContext
     public DbSet<DicomImage> Images => Set<DicomImage>();
 
     public DbSet<Document> Documents => Set<Document>();
-    public DbSet<InboxDocument> InboxDocuments => Set<InboxDocument>();
     public DbSet<ClinicSettings> ClinicSettings => Set<ClinicSettings>();
     public DbSet<User> Users => Set<User>();
-    public DbSet<DicomNode> DicomNodes => Set<DicomNode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +35,9 @@ public class ClariMedDbContext : DbContext
             entity.HasIndex(e => e.Modality);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.IsDeleted);
+            entity.HasIndex(e => e.AccessionNumber);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.DeletedAt);
             
             entity.HasQueryFilter(s => !s.IsDeleted);
         });

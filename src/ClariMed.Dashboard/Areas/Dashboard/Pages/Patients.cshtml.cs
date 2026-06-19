@@ -23,6 +23,13 @@ public class PatientsModel : PageModel
     public int Receiving { get; set; }
     public int Complete { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? StartDate { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? EndDate { get; set; }
+
+
     public PatientsModel(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
@@ -32,19 +39,29 @@ public class PatientsModel : PageModel
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
-        await LoadAsync(db, search, modality, status, startDate, endDate);
+        await LoadAsync(db, search, modality, status, startDate, endDate, isInitialLoad: Request.Query.Count == 0);
     }
 
     public async Task<IActionResult> OnGetTableAsync(string? search, string? modality, string? status, string? startDate, string? endDate)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClariMedDbContext>();
-        await LoadAsync(db, search, modality, status, startDate, endDate);
+        await LoadAsync(db, search, modality, status, startDate, endDate, isInitialLoad: false);
         return Partial("Shared/_PatientsTable", this);
     }
 
-    private async Task LoadAsync(ClariMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate)
+    private async Task LoadAsync(ClariMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate, bool isInitialLoad)
     {
+        // Default to today if no dates and no other filters are provided (initial load)
+        if (isInitialLoad && string.IsNullOrEmpty(startDate) && string.IsNullOrEmpty(endDate) && string.IsNullOrEmpty(search))
+        {
+            startDate = DateTime.Today.ToString("yyyy-MM-dd");
+            endDate = DateTime.Today.ToString("yyyy-MM-dd");
+        }
+
+        StartDate = startDate;
+        EndDate = endDate;
+
         // Global stats
         TotalStudies = await db.Studies.CountAsync();
         TotalImages = await db.Studies.SumAsync(s => s.ImageCount);
@@ -93,8 +110,8 @@ public class PatientsModel : PageModel
             query = query.Where(s => s.StudyDate < localEnd);
         }
 
-        // Indexing from old to new (ascending order)
-        query = query.OrderBy(s => s.StudyDate ?? s.CreatedAt);
+        // Indexing from new to old (descending order)
+        query = query.OrderByDescending(s => s.StudyDate ?? s.CreatedAt);
 
         var rawStudies = await query.Take(500).ToListAsync();
 
@@ -129,4 +146,17 @@ public class PatientsModel : PageModel
 
         return RedirectToPage();
     }
+}
+
+public class StudyRow
+{
+    public int Id { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string PatientId { get; set; } = string.Empty;
+    public string Modality { get; set; } = string.Empty;
+    public string AccessionNumber { get; set; } = string.Empty;
+    public int ImageCount { get; set; }
+    public DateTime? StudyDate { get; set; }
+    public StudyStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

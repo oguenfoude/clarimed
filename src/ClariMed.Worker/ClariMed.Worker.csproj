@@ -25,7 +25,6 @@
     <ProjectReference Include="..\ClariMed.Data\ClariMed.Data.csproj" />
     <ProjectReference Include="..\ClariMed.Documents\ClariMed.Documents.csproj" />
     <ProjectReference Include="..\ClariMed.Dashboard\ClariMed.Dashboard.csproj" />
-    <ProjectReference Include="..\ClariMed.VirtualPrinter\ClariMed.VirtualPrinter.csproj" />
   </ItemGroup>
 
 </Project>

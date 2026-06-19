@@ -1,29 +1,29 @@
 @model ClariMed.Dashboard.Areas.Dashboard.Pages.RecycleBinModel
 
-<div class="bg-white/80 backdrop-blur-2xl rounded-3xl border border-white p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative z-10" id="recyclebin-table">
-    <div class="overflow-x-auto min-h-[400px]">
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-4" id="recyclebin-table">
+    <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
             <thead>
-                <tr class="border-b-2 border-slate-100">
-                    <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">@Loc["RecycleBin_Col_Patient"]</th>
-                    <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">@Loc["RecycleBin_Col_Modality"]</th>
-                    <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell">@Loc["RecycleBin_Col_Date"]</th>
-                    <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">@Loc["RecycleBin_Col_DeletedAt"]</th>
-                    <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">@Loc["RecycleBin_Col_Actions"]</th>
+                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th class="px-4 py-2.5">@Loc["RecycleBin_Col_Patient"]</th>
+                    <th class="px-4 py-2.5 hidden sm:table-cell">@Loc["RecycleBin_Col_Modality"]</th>
+                    <th class="px-4 py-2.5 hidden md:table-cell">@Loc["RecycleBin_Col_Date"]</th>
+                    <th class="px-4 py-2.5">@Loc["RecycleBin_Col_DeletedAt"]</th>
+                    <th class="px-4 py-2.5 text-right">@Loc["RecycleBin_Col_Actions"]</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100/80">
+            <tbody class="divide-y divide-slate-100 text-xs font-medium text-slate-700">
                 @if (Model.DeletedStudies.Count == 0)
                 {
                     <tr>
-                        <td colspan="5" class="px-6 py-20 text-center">
-                            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
-                                <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <td colspan="5" class="px-4 py-16 text-center">
+                            <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </div>
-                            <p class="text-lg font-black text-slate-700 tracking-tight">@Loc["RecycleBin_Empty"]</p>
-                            <p class="text-sm font-medium text-slate-400 mt-2">@Loc["RecycleBin_EmptyDesc"]</p>
+                            <p class="text-sm font-bold text-slate-700">@Loc["RecycleBin_Empty"]</p>
+                            <p class="text-xs font-medium text-slate-400 mt-1">@Loc["RecycleBin_EmptyDesc"]</p>
                         </td>
                     </tr>
                 }
@@ -32,30 +32,30 @@
                     foreach (var s in Model.DeletedStudies)
                     {
                         <tr class="group hover:bg-slate-50/50 transition-colors">
-                            <td class="px-6 py-5 align-middle">
-                                <div class="font-black text-slate-800 text-sm tracking-tight">@s.PatientName</div>
-                                <div class="text-[11px] text-slate-400 font-bold tracking-wider mt-1 uppercase">@s.PatientId</div>
+                            <td class="px-4 py-2.5 align-middle">
+                                <div class="font-bold text-slate-800 text-xs">@s.PatientName</div>
+                                <div class="text-[10px] text-slate-400 font-semibold mt-0.5">@s.PatientId</div>
                             </td>
-                            <td class="px-6 py-5 align-middle hidden sm:table-cell">
-                                <span class="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-widest">
+                            <td class="px-4 py-2.5 align-middle hidden sm:table-cell">
+                                <span class="px-2 py-0.5 rounded border border-slate-200 bg-white text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                                     @s.Modality
                                 </span>
                             </td>
-                            <td class="px-6 py-5 align-middle hidden md:table-cell">
-                                <div class="text-sm font-bold text-slate-600">
-                                    @(s.StudyDate?.ToString("yyyy-MM-dd") ?? "Unknown")
+                            <td class="px-4 py-2.5 align-middle hidden md:table-cell">
+                                <div class="text-[11px] font-bold text-slate-500">
+                                    @(s.StudyDate?.ToString("MMM dd, yyyy") ?? "Unknown")
                                 </div>
                             </td>
-                            <td class="px-6 py-5 align-middle">
-                                <div class="text-[11px] font-bold text-rose-500 uppercase tracking-wider">
+                            <td class="px-4 py-2.5 align-middle">
+                                <div class="text-[10px] font-bold text-slate-500">
                                     @s.CreatedAt.ToString("MMM dd, yyyy HH:mm")
                                 </div>
                             </td>
-                            <td class="px-6 py-5 align-middle text-right">
-                                <div class="flex items-center justify-end gap-3">
+                            <td class="px-4 py-2.5 align-middle text-right">
+                                <div class="flex items-center justify-end gap-1.5">
                                     <!-- Restore Button -->
                                     <form method="post" asp-page-handler="Restore" asp-route-id="@s.Id">
-                                        <button type="submit" class="px-4 py-2 text-xs font-black text-emerald-600 bg-white hover:bg-emerald-50 rounded-xl transition-all border border-emerald-200/50 hover:border-emerald-300 shadow-sm hover:shadow uppercase tracking-wider">
+                                        <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-emerald-600 bg-white hover:bg-emerald-50 rounded-lg transition-all border border-emerald-200 hover:border-emerald-300 shadow-sm">
                                             @Loc["RecycleBin_Btn_Restore"]
                                         </button>
                                     </form>
@@ -63,7 +63,7 @@
                                     <!-- Permanent Delete Button -->
                                     <form method="post" asp-page-handler="ForceDelete" asp-route-id="@s.Id" 
                                           onsubmit="return confirm('@Html.Raw(Loc["RecycleBin_ConfirmDelete"])');">
-                                        <button type="submit" class="px-4 py-2 text-xs font-black text-white bg-rose-500 hover:bg-rose-600 rounded-xl transition-all shadow-md shadow-rose-500/20 hover:shadow-lg hover:-translate-y-0.5 uppercase tracking-wider">
+                                        <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-lg transition-all shadow-sm">
                                             @Loc["RecycleBin_Btn_DeleteForever"]
                                         </button>
                                     </form>
