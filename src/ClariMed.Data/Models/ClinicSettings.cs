@@ -25,8 +25,10 @@ public class ClinicSettings
 
     public bool PrinterRegistered { get; set; } = false;
 
-    /// <summary>When true, the DICOM server needs a restart to apply new port/AE Title settings.</summary>
     public bool DicomSettingsPendingRestart { get; set; } = false;
+
+    public bool UpdateAvailable { get; set; } = false;
+    public string LatestVersion { get; set; } = string.Empty;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

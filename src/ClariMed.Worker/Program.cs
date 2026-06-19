@@ -20,6 +20,23 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Global Exception Handlers (Crash Safety) ──
+AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+{
+    var exception = e.ExceptionObject as Exception;
+    Console.WriteLine($"[CRITICAL] Unhandled Exception: {exception?.Message}");
+    // Do not auto-restart, let Windows Service Manager or Docker handle it if configured,
+    // but the application itself gracefully stops.
+    Environment.Exit(1);
+};
+
+TaskScheduler.UnobservedTaskException += (sender, e) =>
+{
+    Console.WriteLine($"[CRITICAL] Unobserved Task Exception: {e.Exception?.Message}");
+    e.SetObserved();
+    Environment.Exit(1);
+};
+
 // ── Serve on port 5000 ──
 builder.WebHost.UseUrls("http://*:5000");
 
@@ -66,6 +83,7 @@ builder.Services.AddHostedService<DocumentWatcherService>();
 builder.Services.AddHostedService<StudyCompletionService>();
 builder.Services.AddHostedService<RecycleBinCleanupService>();
 builder.Services.AddHostedService<DicomRestartService>();
+builder.Services.AddHostedService<UpdateCheckerService>();
 
 // ── Authentication (Cookie-based) ──
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

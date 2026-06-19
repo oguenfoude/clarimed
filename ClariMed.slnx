@@ -7,5 +7,6 @@
     <Project Path="src/ClariMed.Printing/ClariMed.Printing.csproj" />
     <Project Path="src/ClariMed.Dashboard/ClariMed.Dashboard.csproj" />
     <Project Path="src/ClariMed.Worker/ClariMed.Worker.csproj" />
+    <Project Path="src/ClariMed.Notifier/ClariMed.Notifier.csproj" />
   </Folder>
 </Solution>

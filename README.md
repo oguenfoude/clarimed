@@ -564,6 +564,8 @@ dotnet watch run --project src\ClariMed.Worker
 5. **Assignment Workflow** — Linking a Virtual Printer PDF redirects directly to the study preview.
 6. **Unified Search & Filtering** — Filter bars in Patients and Recycle Bin offer a single, powerful search field for Patient Name, Patient ID, and Accession Number, coupled with start and end date ranges.
 7. **Filter State Preservation** — Filters are stored in `sessionStorage` and restored automatically when navigating back to the page. HTMX updates the lists dynamically via triggered events upon restoration.
-8. **Page Reload Prevention** — JavaScript interceptors prevent full page reloads and resets when the `Enter` key is pressed inside search inputs, resolving HTMX interaction issues.
-9. **Scrollable Filters** — Filter bars scroll natively with the page content for a cleaner, non-intrusive viewing experience.
-10. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
+568. **Scrollable Filters** — Filter bars scroll natively with the page content for a cleaner, non-intrusive viewing experience.
+569. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
+570. **Crash Safety** — Global `UnhandledException` and `UnobservedTaskException` handlers in `Program.cs` cleanly exit the service on fatal errors instead of looping. Service loops execute within safe `try/catch` blocks.
+571. **Manual Stop Page** — A dedicated `/system-stop` page accessible via the sidebar to gracefully stop the background services and the Kestrel host via `IHostApplicationLifetime`.
+572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `ClariMed.Notifier` (a standalone WinForms tray app) alerts the user to updates and provides a context menu to reuse an existing browser tab (via PowerShell UIAutomation) or to run an update script.

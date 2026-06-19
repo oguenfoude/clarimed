@@ -85,6 +85,16 @@
                     </svg>
                     <span x-show="sidebarOpen" style="@(isSidebarOpen ? "" : "display:none;")" x-transition.opacity.duration.300ms class="whitespace-nowrap">@Loc["Sidebar_Settings"]</span>
                 </a>
+
+                <div class="pt-4 mt-2 border-t border-slate-700/50">
+                    <a href="/system-stop" class="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group font-medium text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-500 @(!isSidebarOpen ? "justify-center" : "")" :title="sidebarOpen ? '' : 'Stop System'" :class="!sidebarOpen && 'justify-center'">
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6v4H9z" />
+                        </svg>
+                        <span x-show="sidebarOpen" style="@(isSidebarOpen ? "" : "display:none;")" x-transition.opacity.duration.300ms class="whitespace-nowrap">Stop System</span>
+                    </a>
+                </div>
             </div>
         </nav>
 
