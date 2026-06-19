@@ -566,3 +566,4 @@ dotnet watch run --project src\ClariMed.Worker
 7. **Filter State Preservation** — Filters are stored in `sessionStorage` and restored automatically when navigating back to the page. HTMX updates the lists dynamically via triggered events upon restoration.
 8. **Page Reload Prevention** — JavaScript interceptors prevent full page reloads and resets when the `Enter` key is pressed inside search inputs, resolving HTMX interaction issues.
 9. **Scrollable Filters** — Filter bars scroll natively with the page content for a cleaner, non-intrusive viewing experience.
+10. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
