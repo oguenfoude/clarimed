@@ -1,0 +1,454 @@
+@page "/preview/{id:int}"
+@model FocusMed.Dashboard.Areas.Dashboard.Pages.PreviewModel
+@{
+    ViewData["Title"] = "Study Preview";
+    
+    // Convert absolute DB paths to relative paths for the /dicom-images/ StaticFileProvider
+    string GetRelative(string fullPath)
+    {
+        var normalized = fullPath.Replace("\\", "/");
+        var idx = normalized.IndexOf("/archive/");
+        if (idx == -1) idx = normalized.IndexOf("/images/");
+        if (idx == -1) return System.IO.Path.GetFileName(normalized).Replace(".dcm", ".png");
+        return normalized.Substring(idx + 9).Replace(".dcm", ".png");
+    }
+
+    var initImages = Model.AllImages.Select(i => new {
+        id = i.Id,
+        path = $"/preview/{Model.Study!.Id}?handler=Thumbnail&size=800&path={Uri.EscapeDataString(GetRelative(i.FilePath))}",
+        thumbPath = $"/preview/{Model.Study!.Id}?handler=Thumbnail&size=150&path={Uri.EscapeDataString(GetRelative(i.FilePath))}",
+        rawPath = $"/dicom-images/{GetRelative(i.FilePath)}",
+        label = $"#{i.InstanceNumber}"
+    });
+}
+
+<script id="init-images-json" type="application/json">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(initImages))
+</script>
+
+<div id="preview-container" class="w-full h-full flex flex-col overflow-hidden bg-slate-50" x-data="previewApp(@Model.Study!.Id)">
+
+    <!-- TOP TOOLBAR -->
+    <div class="top-toolbar flex items-center justify-between px-8 py-4 bg-white/70 backdrop-blur-xl border-b border-white z-20 shrink-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative">
+        <!-- Patient Info -->
+        <div class="flex items-center gap-6">
+            <div class="flex flex-col">
+                <div class="flex items-center gap-3">
+                    <span class="px-2.5 py-1 text-[10px] font-extrabold bg-blue-600 text-white rounded-md uppercase tracking-wider shadow-sm">
+                        @Model.Study.Modality
+                    </span>
+                    <h2 class="text-lg font-black text-slate-800 tracking-tight">
+                        @Model.Study.Patient?.Name
+                    </h2>
+                </div>
+                <div class="flex items-center gap-3 mt-1.5 text-xs font-medium text-slate-500">
+                    <span class="flex items-center gap-1"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> @Model.Study.Patient?.PatientId</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="flex items-center gap-1">@Model.Study.Patient?.Sex</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="flex items-center gap-1">@(Model.Study.Patient?.BirthDate != null ? $"DOB: {Model.Study.Patient.BirthDate.Value:yyyy-MM-dd}" : "")</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="flex items-center gap-1"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> @Model.Study.AccessionNumber</span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span class="text-slate-600">@Model.Study.StudyDescription</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions & Settings -->
+        <div class="flex items-center gap-6">
+            <!-- Settings Controls Group -->
+            <div class="flex items-center gap-4 bg-slate-50 border border-slate-200/80 rounded-xl p-1 px-3 shadow-sm">
+                <!-- Images Per Page -->
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Images / Page</span>
+                    <input type="number" x-model.number="imagesPerPage" min="1" max="64" class="w-14 h-8 px-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-center">
+                </div>
+                
+                <div class="w-px h-6 bg-slate-200"></div>
+
+                <!-- Spacing (Gap) -->
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Gap (px)</span>
+                    <input type="number" x-model.number="gap" min="0" max="64" class="w-14 h-8 px-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-center">
+                </div>
+            </div>
+
+            <!-- Reset Button -->
+            @if (Model.LinkedDocument != null)
+            {
+                <form method="post" asp-page-handler="RemoveDocument" asp-route-studyId="@Model.Study.Id" asp-route-docId="@Model.LinkedDocument.Id" class="m-0 flex items-center">
+                    <button type="submit" class="h-10 px-4 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Unlink Document
+                    </button>
+                </form>
+            }
+
+
+
+            <div class="flex items-center gap-3">
+                <a x-show="pdfUrl" :href="pdfUrl" target="_blank" download class="h-10 px-4 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Save PDF
+                </a>
+                <button x-show="pdfUrl" x-on:click="printPdf()"
+                        class="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Print
+                </button>
+                <div x-show="pdfUrl" class="w-px h-6 bg-slate-200"></div>
+
+                <button x-on:click="generatePdf()" :disabled="generating || activeImages.length === 0"
+                        class="relative h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-[0_4px_14px_rgba(37,99,235,0.3)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] disabled:opacity-50 overflow-hidden group flex items-center gap-2 whitespace-nowrap">
+                    <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                    <svg x-show="generating" class="w-4 h-4 animate-spin text-white/80" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span class="relative" x-text="generating ? 'Processing...' : 'Generate Full PDF'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN BODY SECTION -->
+    <div class="flex-1 flex flex-row overflow-hidden relative">
+
+        @if (Model.Study.Status == FocusMed.Data.Models.StudyStatus.Receiving)
+        {
+            <!-- Polling Overlay -->
+            <div class="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center"
+                 hx-get="/preview/@Model.Study.Id?handler=CheckStatus"
+                 hx-trigger="every 3s"
+                 hx-swap="none">
+                <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+                    <svg class="w-12 h-12 animate-spin text-blue-600 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <h3 class="text-lg font-bold text-slate-800">Receiving Images...</h3>
+                    <p class="text-sm text-slate-500 mt-2">Please wait while the study finishes transmitting from the modality.</p>
+                </div>
+            </div>
+        }
+        
+        <!-- LEFT SIDEBAR -->
+        <aside class="left-sidebar w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 h-full overflow-hidden shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
+
+
+            <!-- Image Selection Header -->
+            <div class="px-6 py-4 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">Image Sequence</span>
+                </div>
+                <span class="px-2.5 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded-md"
+                      x-text="`${activeImages.length} of ${images.length}`"></span>
+            </div>
+
+            <!-- Scrollable Image List -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-slate-50" x-ref="sidebarList">
+                <template x-for="(img, index) in images" :key="img.id">
+                    <div :class="img.included ? 'border-blue-400 bg-blue-50/40 shadow-sm ring-1 ring-blue-500/10' : 'border-slate-200 bg-white opacity-60 grayscale-[0.2] hover:grayscale-0'"
+                         class="relative flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-300 hover:shadow-md cursor-default group">
+                        
+                        <!-- Drag Handle -->
+                        <div class="drag-handle cursor-grab text-slate-300 hover:text-slate-600 shrink-0 p-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 8h16M4 16h16"/>
+                            </svg>
+                        </div>
+
+                        <!-- Toggle Checkbox -->
+                        <div class="shrink-0 flex items-center justify-center">
+                            <div class="relative flex items-center justify-center cursor-pointer" x-on:click="img.included = !img.included">
+                                <div :class="img.included ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'" class="w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shadow-sm">
+                                    <svg x-show="img.included" class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thumbnail -->
+                        <div class="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-black flex items-center justify-center shadow-inner cursor-pointer"
+                             x-on:click.stop="modalImage = img.path">
+                            <img :src="img.thumbPath" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy"/>
+                        </div>
+
+                        <!-- Label -->
+                        <div class="flex-1 min-w-0 flex flex-col justify-center">
+                            <p class="text-sm font-bold text-slate-800" x-text="img.label"></p>
+                            <p class="text-[10px] text-slate-400 font-medium truncate mt-0.5" x-text="img.included ? 'Included in Report' : 'Omitted'"></p>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="images.length === 0" class="text-center text-xs text-slate-400 font-medium py-12">No images in study</div>
+            </div>
+        </aside>
+
+        <!-- RIGHT PREVIEW PANEL (Side-by-side Layout Editor and PDF preview) -->
+        <div id="right-panel" class="flex-1 flex flex-row bg-slate-100/50 relative overflow-hidden h-full">
+            
+            <!-- COLUMN 2: Layout Editor (HTML pages) -->
+            <div x-show="!pdfUrl" class="flex-1 h-full overflow-auto custom-scrollbar p-10 flex flex-col items-center border-r border-slate-200">
+                <!-- Cover Page Preview -->
+                <div x-show="coverPageBase64" class="w-[794px] h-[1123px] bg-white shadow-xl mx-auto mb-10 relative overflow-hidden flex-shrink-0 a4-page ring-1 ring-slate-900/5 transition-all print:shadow-none print:ring-0 print:mb-0">
+                    <div class="absolute bottom-5 right-8 text-[11px] text-slate-400 font-bold z-10 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-slate-100 print:hidden">
+                        Cover Page
+                    </div>
+                    <iframe :src="coverPageBase64 ? 'data:application/pdf;base64,' + coverPageBase64 + '#toolbar=0&navpanes=0&scrollbar=0' : ''" class="w-full h-full border-0"></iframe>
+                </div>
+
+                <!-- Report PDF Preview -->
+                @if (Model.LinkedDocument != null)
+                {
+                    <div class="w-[794px] h-[1123px] bg-white shadow-xl mx-auto mb-10 relative overflow-hidden flex-shrink-0 a4-page ring-1 ring-slate-900/5 transition-all print:shadow-none print:ring-0 print:mb-0">
+                        <div class="absolute bottom-5 right-8 flex gap-2 z-10 print:hidden">
+                            <div class="text-[11px] text-slate-400 font-bold bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                Report Document
+                            </div>
+                        </div>
+                        <iframe src="/preview/@Model.Study.Id?handler=ReportPdf&docId=@Model.LinkedDocument.Id#toolbar=0&navpanes=0&scrollbar=0" class="w-full h-full border-0"></iframe>
+                    </div>
+                }
+
+                <!-- Image Pages -->
+                <template x-for="(page, pageIndex) in pages" :key="pageIndex">
+                    <div class="w-[794px] h-[1123px] bg-white shadow-xl mx-auto mb-10 relative overflow-hidden flex-shrink-0 a4-page ring-1 ring-slate-900/5 transition-all print:shadow-none print:ring-0 print:mb-0">
+                        <div class="absolute bottom-5 right-8 text-[11px] text-slate-400 font-bold z-10 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-slate-100 print:hidden">
+                            Page <span x-text="pageIndex + 1" class="text-slate-700"></span> / <span x-text="pages.length"></span>
+                        </div>
+
+                        <div class="w-full"
+                         :style="`display: grid; 
+                                  grid-template-columns: repeat(${columnsPerRow}, 1fr); 
+                                  grid-auto-rows: min-content; 
+                                  align-content: start;
+                                  gap: ${gap}px; 
+                                  padding: ${gap}px;`">
+                            
+                            <template x-for="(img, imgIndex) in page" :key="img.id">
+                               <div class="bg-transparent overflow-hidden relative group/img rounded-sm shadow-sm w-full">
+                                   <img :src="img.path" class="w-full h-auto block" loading="lazy"/>
+                                   <div class="absolute top-3 left-3 text-slate-800 text-[10px] font-bold bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded shadow-sm border border-slate-200/50" x-text="img.label"></div>
+                                   <button x-on:click.stop="img.included = false" 
+                                           class="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all duration-200 shadow-lg transform hover:scale-110">
+                                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                   </button>
+                               </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+                
+                <div x-show="pages.length === 0" class="flex flex-col items-center justify-center py-32 text-slate-400">
+                    <svg class="w-16 h-16 mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <p class="text-sm font-bold">No images selected</p>
+                    <p class="text-xs mt-1">Select images from the left sidebar to build the layout.</p>
+                </div>
+            </div>
+
+            <!-- COLUMN 3: PDF Preview Panel (Replaces Layout Editor) -->
+            <div x-show="pdfUrl" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                 class="flex-1 w-full h-full bg-slate-100 flex flex-col relative pdf-preview-col z-30">
+                
+                <!-- Side Panel Header -->
+                <div class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm z-10">
+                    <div class="flex flex-col">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase tracking-wider rounded">Final Document</span>
+                            <h3 class="text-sm font-black text-slate-800">Print Preview</h3>
+                        </div>
+                        <p class="text-[10px] text-slate-500 font-medium mt-1 uppercase tracking-wider">
+                            @Model.Study.Patient?.Name &bull; @Model.Study.StudyDescription
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <a :href="pdfUrl" target="_blank" download class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Save
+                        </a>
+                        <button x-on:click="printPdf()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            Print
+                        </button>
+                        <div class="w-px h-5 bg-slate-200 mx-1"></div>
+                        <button x-on:click="pdfUrl = null" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors" title="Close Preview">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- IFrame Container -->
+                <div class="flex-1 w-full bg-slate-200/50 p-6 overflow-hidden">
+                    <div class="w-full h-full bg-white shadow-xl ring-1 ring-slate-900/5 rounded-sm overflow-hidden">
+                        <iframe :src="pdfUrl ? pdfUrl : ''" class="w-full h-full border-0"></iframe>
+                    </div>
+                </div>
+            </div>
+            <!-- Full-screen Image Modal -->
+            <div x-show="modalImage" style="display:none;" x-transition.opacity.duration.300ms class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-8">
+                <button x-on:click="modalImage = null" class="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors bg-white/10 rounded-full p-2">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <img :src="modalImage" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl ring-1 ring-white/10" x-on:click.outside="modalImage = null" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="/lib/sortable.min.js"></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('previewApp', (studyId) => ({
+                studyId: studyId,
+                images: [],
+                imagesPerPage: 8,
+                gap: 0,
+                generating: false,
+                pdfUrl: null,
+                coverPageBase64: null,
+                modalImage: null,
+
+                get columnsPerRow() {
+                    const len = parseInt(this.imagesPerPage);
+                    if (len === 1) return 1;
+                    if (len === 2) return 1;
+                    if (len <= 8) return 2;
+                    return 3;
+                },
+
+                get activeImages() {
+                    return this.images.filter(i => i.included);
+                },
+
+                get pages() {
+                    const result = [];
+                    const len = parseInt(this.imagesPerPage);
+                    const active = this.activeImages;
+                    for (let i = 0; i < active.length; i += len) {
+                        result.push(active.slice(i, i + len));
+                    }
+                    return result;
+                },
+
+                init() {
+                    const jsonEl = document.getElementById('init-images-json');
+                    if (jsonEl) {
+                        try {
+                            const initialImages = JSON.parse(jsonEl.textContent);
+                            this.images = initialImages.map(img => ({ ...img, included: true }));
+                        } catch (e) {
+                            console.error("Failed to parse initial images:", e);
+                        }
+                    }
+
+                    this.fetchCoverPage();
+
+                    this.$nextTick(() => {
+                        const el = this.$refs.sidebarList;
+                        if (el) {
+                            Sortable.create(el, {
+                                animation: 200,
+                                ghostClass: 'opacity-50',
+                                handle: '.drag-handle',
+                                onEnd: (evt) => {
+                                    const moved = this.images.splice(evt.oldIndex, 1)[0];
+                                    this.images.splice(evt.newIndex, 0, moved);
+                                }
+                            });
+                        }
+                    });
+
+                    this.$watch('imagesPerPage', () => this.invalidatePdf());
+                    this.$watch('gap', () => this.invalidatePdf());
+                    this.$watch('images', () => this.invalidatePdf(), { deep: true });
+                },
+
+                async fetchCoverPage() {
+                    try {
+                        const res = await fetch(`/preview/${this.studyId}?handler=CoverPdf`);
+                        const data = await res.json();
+                        if (data.base64) {
+                            this.coverPageBase64 = data.base64;
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch cover page:", e);
+                    }
+                },
+
+                invalidatePdf() {
+                    if (this.pdfUrl) {
+                        this.pdfUrl = null;
+                    }
+                },
+
+                async generatePdf() {
+                    this.generating = true;
+                    try {
+                        const requestData = {
+                            StudyId: parseInt(this.studyId),
+                            OrderedImagePaths: this.images.filter(img => img.included).map(img => img.rawPath),
+                            ColumnsPerRow: parseInt(this.columnsPerRow),
+                            ImagesPerPage: parseInt(this.imagesPerPage),
+                            GapPx: parseInt(this.gap)
+                        };
+
+                        const res = await fetch(`/preview/${this.studyId}?handler=GeneratePdf`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestData)
+                        });
+
+                        const data = await res.json();
+                        if (data.success) {
+                            this.pdfUrl = data.downloadUrl;
+                        } else {
+                            alert("Failed to generate PDF");
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        alert("Error generating PDF");
+                    } finally {
+                        this.generating = false;
+                    }
+                },
+
+                print() {
+                    window.print();
+                },
+
+                printPdf() {
+                    const iframe = document.querySelector('.pdf-preview-col iframe');
+                    if (iframe) {
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                    }
+                }
+            }));
+        });
+    </script>
+    <style>
+        main {
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        @@media print {
+            @@page { margin: 0; size: A4; }
+            body { background: white !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+            .top-toolbar, .left-sidebar, .pdf-preview-col { display: none !important; }
+            header, aside { display: none !important; }
+            #right-panel { margin: 0; padding: 0; background: white !important; display: block !important; overflow: visible !important; height: auto !important; position: static !important; border: none !important; }
+            .a4-page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; page-break-after: always; width: 100% !important; height: 100% !important; }
+            iframe { width: 100% !important; height: 100% !important; }
+        }
+    </style>
+}

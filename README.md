@@ -1,4 +1,4 @@
-# ClariMed
+# FocusMed
 
 **Clari**ty + **Med**ical — A Windows Background Service for medical imaging and reporting with a Razor Pages dashboard (Areas pattern). Receives DICOM images from medical devices (X-Ray, CT, MRI), ingests `.docx` reports from a watch folder, receives PDFs via a built-in Virtual Printer, generates a professional PDF (cover page + report + images), and prints silently to a local Windows printer. Includes a secure web dashboard at `http://localhost:5000`.
 
@@ -25,13 +25,13 @@
 
 ## What It Does
 
-ClariMed runs as a Windows Service and operates parallel, fully asynchronous pipelines, plus a secure Razor Pages dashboard:
+FocusMed runs as a Windows Service and operates parallel, fully asynchronous pipelines, plus a secure Razor Pages dashboard:
 
 | Pipeline               | Input                                             | Output                                                           |
 | ---------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **DICOM Ingestion**    | Images from X-Ray / CT / MRI over TCP port 104    | `.dcm` archive + `.png` images + SQLite records                  |
 | **Document Ingestion** | `.docx` files dropped into a watch folder         | Converted `.pdf` + SQLite `Document` record                      |
-| **Virtual Printer**    | PDFs printed to "ClariMed" Windows printer        | PDF stored in `InboxDocument` waiting for assignment             |
+| **Virtual Printer**    | PDFs printed to "FocusMed" Windows printer        | PDF stored in `InboxDocument` waiting for assignment             |
 | **Merge & Print**      | Generated directly via Study Preview             | Final merged PDF (cover + report + images) → silent print        |
 | **Dashboard**          | Web browser at `http://localhost:5000`            | Secure study viewer, patient browser, inbox, settings, users     |
 
@@ -42,12 +42,12 @@ ClariMed runs as a Windows Service and operates parallel, fully asynchronous pip
 ```mermaid
 flowchart TD
     Modality["DICOM Modality\n(X-Ray, CT, MRI)"]
-    WatchFolder["C:/ClariMed/WatchFolder\n(.docx files)"]
+    WatchFolder["C:/FocusMed/WatchFolder\n(.docx files)"]
     PrintClient["Print Client\n(Windows)"]
     Browser["Web Browser\nhttp://localhost:5000"]
 
-    subgraph SVC["ClariMed Windows Service"]
-        subgraph Worker["ClariMed.Worker"]
+    subgraph SVC["FocusMed Windows Service"]
+        subgraph Worker["FocusMed.Worker"]
             S1["① DicomListenerService"]
             S2["② DocumentWatcherService"]
             S3["③ DocumentProcessingService"]
@@ -57,26 +57,26 @@ flowchart TD
             S7["⑦ DicomRestartService"]
         end
 
-        subgraph Dicom["ClariMed.Dicom"]
+        subgraph Dicom["FocusMed.Dicom"]
             CStore["CStoreScp\n(C-STORE Handler)"]
         end
 
-        subgraph Docs["ClariMed.Documents"]
+        subgraph Docs["FocusMed.Documents"]
             FSW["WatchFolderIngestionChannel\n(FileSystemWatcher)"]
             Q["DocumentIngestionQueue\nChannel<T>"]
             Conv["SpireDocumentConverter\n.docx → .pdf"]
         end
 
-        subgraph VPrinter["ClariMed.VirtualPrinter"]
+        subgraph VPrinter["FocusMed.VirtualPrinter"]
             Reg["WindowsPrinterRegistration\nFile-based virtual printer"]
         end
 
-        subgraph Print["ClariMed.Printing"]
+        subgraph Print["FocusMed.Printing"]
             Cover["QuestPdfCoverPageGenerator"]
             Merge["PdfSharpMerger\n(Cover + Report + Images)"]
         end
 
-        subgraph Dash["ClariMed.Dashboard"]
+        subgraph Dash["FocusMed.Dashboard"]
             LoginPage["Login Page\n(Cookie Auth)"]
             Dashboard["Dashboard\n(Stats)"]
             Patients["Patients\n(Browser)"]
@@ -86,8 +86,8 @@ flowchart TD
             RecycleBin["Recycle Bin\n(Soft delete)"]
         end
 
-        subgraph Data["ClariMed.Data"]
-            DB[("SQLite\n(WAL mode)\nclarimed.db")]
+        subgraph Data["FocusMed.Data"]
+            DB[("SQLite\n(WAL mode)\nfocusmed.db")]
             FS[/"File System\ndb/ archive/ images/ output/ inbox/"\]
         end
     end
@@ -103,7 +103,7 @@ flowchart TD
     S3 --"ReadAllAsync"--> Q --> Conv --"save .pdf"--> FS
     S3 --"Document"--> DB
 
-    PrintClient --"Print to ClariMed\nVirtualPrint.pdf"--> S5 --> Reg
+    PrintClient --"Print to FocusMed\nVirtualPrint.pdf"--> S5 --> Reg
     Reg --"InboxDocument"--> DB
     Reg --"Save .pdf"--> FS
 
@@ -121,31 +121,31 @@ flowchart TD
 ## Project Structure
 
 ```
-ClariMed/
-├── ClariMed.slnx                         ← XML solution (not .sln)
+FocusMed/
+├── FocusMed.slnx                         ← XML solution (not .sln)
 ├── AGENTS.md                             ← Architecture rules for AI agents
 ├── README.md                             ← This file
 │
 ├── src/
-│   ├── ClariMed.Data/                    ← Data access layer (EF Core 8 + SQLite)
-│   ├── ClariMed.Dicom/                   ← DICOM network layer (fo-dicom)
-│   ├── ClariMed.Documents/               ← Document watcher + Spire conversion
-│   ├── ClariMed.Imaging/                 ← DICOM pixel → PNG conversion
-│   ├── ClariMed.Printing/                ← PDF generation (QuestPDF + PdfSharpCore)
-│   ├── ClariMed.VirtualPrinter/          ← File-based virtual printer registration
-│   ├── ClariMed.Dashboard/               ← Razor Pages web interface (Areas pattern)
-│   ├── ClariMed.Notifier/                ← Standalone WinForms tray app
-│   └── ClariMed.Worker/                  ← Windows Service orchestrator
+│   ├── FocusMed.Data/                    ← Data access layer (EF Core 8 + SQLite)
+│   ├── FocusMed.Dicom/                   ← DICOM network layer (fo-dicom)
+│   ├── FocusMed.Documents/               ← Document watcher + Spire conversion
+│   ├── FocusMed.Imaging/                 ← DICOM pixel → PNG conversion
+│   ├── FocusMed.Printing/                ← PDF generation (QuestPDF + PdfSharpCore)
+│   ├── FocusMed.VirtualPrinter/          ← File-based virtual printer registration
+│   ├── FocusMed.Dashboard/               ← Razor Pages web interface (Areas pattern)
+│   ├── FocusMed.Notifier/                ← Standalone WinForms tray app
+│   └── FocusMed.Worker/                  ← Windows Service orchestrator
 │
 └── tests/
-    └── (placeholder for ClariMed.Tests)
+    └── (placeholder for FocusMed.Tests)
 ```
 
 ---
 
 ## How Each Layer Works
 
-### ClariMed.Data
+### FocusMed.Data
 
 - **EF Core 8** with **SQLite** in **WAL mode** (Write-Ahead Logging).
 - Repository pattern: every entity has an `IXxxRepository` + `XxxRepository` registered as **scoped**.
@@ -153,31 +153,31 @@ ClariMed/
 - `User` entity with BCrypt-hashed passwords for authentication.
 - `ClinicSettings` singleton row with auto-seeding on first access.
 
-### ClariMed.Dicom
+### FocusMed.Dicom
 
 - `CStoreScp` handles C-STORE requests: extracts DICOM tags → upserts `Patient → Study → Series → DicomImage` → saves `.dcm` → converts pixels to `.png`.
 - Custom stable folder hashing (FNV-1a) is used to group study files deterministically.
 - `DicomFileIngestionService` supports batch import from local folders.
 
-### ClariMed.Documents
+### FocusMed.Documents
 
 - **Producer-Consumer** pattern via `System.Threading.Channels`.
 - `WatchFolderIngestionChannel` monitors for new `.docx` files.
 - `FreeSpire.Doc` performs headless `.docx` → `.pdf` conversion (3-page / 500-paragraph free tier limit).
 
-### ClariMed.VirtualPrinter
+### FocusMed.VirtualPrinter
 
-- **File-based virtual printer**: `WindowsPrinterRegistration` registers a "ClariMed" Windows printer using "Microsoft Print To PDF" driver with a file port.
+- **File-based virtual printer**: `WindowsPrinterRegistration` registers a "FocusMed" Windows printer using "Microsoft Print To PDF" driver with a file port.
 - `VirtualPrinterService` uses `FileSystemWatcher` to detect `VirtualPrint.pdf`, reads it, saves to `data/inbox`, creates an `InboxDocument`.
 - Requires Admin for PowerShell printer registration; failure is non-fatal.
 
-### ClariMed.Printing
+### FocusMed.Printing
 
 - **Cover page**: generated via QuestPDF using `pagegarde.docx` template (FreeSpire fallback).
 - **PDF Merge**: PdfSharpCore appends cover, report, and DICOM images onto A4 pages.
 - **Silent print**: PdfiumViewer submits to the Windows spooler.
 
-### ClariMed.Dashboard
+### FocusMed.Dashboard
 
 Razor Pages class library using the ASP.NET Core **Areas pattern**. All pages require authentication.
 
@@ -325,7 +325,7 @@ The page uses `?section=` query parameters and a left sidebar nav to switch betw
 
 #### 1. General (`_SettingsGeneral.cshtml`)
 - **Language selector** — A `<select>` form that POSTs to `?handler=Language`. Choices: English (US), Francais.
-- **Machines (DICOM Modalities) info card** — Read-only display of the local IP, AE Title, and DICOM port. This is informational for configuring CT/MRI machines to push to ClariMed.
+- **Machines (DICOM Modalities) info card** — Read-only display of the local IP, AE Title, and DICOM port. This is informational for configuring CT/MRI machines to push to FocusMed.
 
 #### 2. DICOM (`_SettingsDicom.cshtml`)
 - **Server Status** — HTMX-polled live indicator (`hx-get="/settings?handler=DicomStatus" hx-trigger="every 3s"`). Shows Active (green) or Restart pending (amber with pulse animation).
@@ -373,13 +373,13 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `Id` | `int` | auto | Primary key |
-| `ClinicName` | `string` | `"ClariMed Clinic"` | Displayed on cover pages and reports |
-| `AETitle` | `string` | `"CLARIMED"` | DICOM Application Entity Title |
+| `ClinicName` | `string` | `"FocusMed Clinic"` | Displayed on cover pages and reports |
+| `AETitle` | `string` | `"FOCUSMED"` | DICOM Application Entity Title |
 | `DicomPort` | `int` | `104` | TCP port for C-STORE connections |
 | `ArchivePath` | `string` | `"archive"` | Root path for raw `.dcm` storage |
-| `DatabasePath` | `string` | `"db/clarimed.db"` | Path to SQLite database |
+| `DatabasePath` | `string` | `"db/focusmed.db"` | Path to SQLite database |
 | `ArchiveIntervalMonths` | `int` | `3` | Archive interval in months |
-| `WatchFolderPath` | `string` | `@"C:\ClariMed\WatchFolder"` | Folder monitored for `.docx` files |
+| `WatchFolderPath` | `string` | `@"C:\FocusMed\WatchFolder"` | Folder monitored for `.docx` files |
 | `Language` | `string` | `"en"` | UI language (`"en"` or `"fr"`) |
 | `ResumeText` | `string` | `""` | Medical text shown between cover page and images |
 | `PrinterRegistered` | `bool` | `false` | Whether the virtual printer has been registered |
@@ -410,23 +410,23 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 
 | File | Path |
 |---|---|
-| PageModel (code-behind) | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml.cs` |
-| Razor view | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml` |
-| General partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsGeneral.cshtml` |
-| DICOM partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsDicom.cshtml` |
-| Users partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsUsers.cshtml` |
-| Users table partial | `src/ClariMed.Dashboard/Areas/Dashboard/Pages/Shared/_UsersTable.cshtml` |
-| ClinicSettings model | `src/ClariMed.Data/Models/ClinicSettings.cs` |
-| IClinicSettingsRepository | `src/ClariMed.Data/Services/IClinicSettingsRepository.cs` |
-| ClinicSettingsRepository | `src/ClariMed.Data/Services/ClinicSettingsRepository.cs` |
-| User model | `src/ClariMed.Data/Models/User.cs` |
-| UserRole enum | `src/ClariMed.Data/Models/UserRole.cs` |
-| IUserRepository | `src/ClariMed.Data/Services/IUserRepository.cs` |
-| UserRepository | `src/ClariMed.Data/Services/UserRepository.cs` |
-| DicomListenerService | `src/ClariMed.Worker/Services/DicomListenerService.cs` |
-| DicomRestartService | `src/ClariMed.Worker/Services/DicomRestartService.cs` |
-| English translations | `src/ClariMed.Dashboard/Resources/en.json` |
-| French translations | `src/ClariMed.Dashboard/Resources/fr.json` |
+| PageModel (code-behind) | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml.cs` |
+| Razor view | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml` |
+| General partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsGeneral.cshtml` |
+| DICOM partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsDicom.cshtml` |
+| Users partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsUsers.cshtml` |
+| Users table partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_UsersTable.cshtml` |
+| ClinicSettings model | `src/FocusMed.Data/Models/ClinicSettings.cs` |
+| IClinicSettingsRepository | `src/FocusMed.Data/Services/IClinicSettingsRepository.cs` |
+| ClinicSettingsRepository | `src/FocusMed.Data/Services/ClinicSettingsRepository.cs` |
+| User model | `src/FocusMed.Data/Models/User.cs` |
+| UserRole enum | `src/FocusMed.Data/Models/UserRole.cs` |
+| IUserRepository | `src/FocusMed.Data/Services/IUserRepository.cs` |
+| UserRepository | `src/FocusMed.Data/Services/UserRepository.cs` |
+| DicomListenerService | `src/FocusMed.Worker/Services/DicomListenerService.cs` |
+| DicomRestartService | `src/FocusMed.Worker/Services/DicomRestartService.cs` |
+| English translations | `src/FocusMed.Dashboard/Resources/en.json` |
+| French translations | `src/FocusMed.Dashboard/Resources/fr.json` |
 
 ---
 
@@ -449,14 +449,14 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 ## File System Layout
 
 ```
-C:\ClariMed\
+C:\FocusMed\
 ├── WatchFolder\          ← Drop .docx files here (also VirtualPrint.pdf lands here)
 ├── Documents\            ← Converted PDFs (.docx → .pdf output)
 └── Output\               ← Final merged PDFs (Cover + Report + Images)
 
-D:\ClariMed\              ← Working directory
+D:\FocusMed\              ← Working directory
 ├── db\
-│   └── clarimed.db       ← SQLite database (WAL mode)
+│   └── focusmed.db       ← SQLite database (WAL mode)
 └── data\
     ├── archive\          ← Raw .dcm files organized by Patient/Study/Series
     ├── images\           ← Converted PNG files (mirror of archive structure)
@@ -467,22 +467,22 @@ D:\ClariMed\              ← Working directory
 
 ## Configuration Reference
 
-Settings live in `src/ClariMed.Worker/appsettings.json` (also overridden by the database `ClinicSettings` table — DB takes precedence for most settings at runtime):
+Settings live in `src/FocusMed.Worker/appsettings.json` (also overridden by the database `ClinicSettings` table — DB takes precedence for most settings at runtime):
 
 | Key                         | Default                   | Description                                            |
 | --------------------------- | ------------------------- | ------------------------------------------------------ |
 | `DicomPort`                 | `104`                     | TCP port the DICOM C-STORE SCP listens on              |
-| `AETitle`                   | `CLARIMED`                | DICOM Application Entity Title                         |
-| `DatabasePath`              | `C:\ClariMed\clarimed.db` | Path to SQLite database file                           |
+| `AETitle`                   | `FOCUSMED`                | DICOM Application Entity Title                         |
+| `DatabasePath`              | `C:\FocusMed\focusmed.db` | Path to SQLite database file                           |
 | `ArchivePath`               | `data/archive`            | Root path for raw `.dcm` file storage                  |
-| `WatchFolderPath`           | `C:\ClariMed\WatchFolder` | Folder monitored for incoming `.docx` files            |
+| `WatchFolderPath`           | `C:\FocusMed\WatchFolder` | Folder monitored for incoming `.docx` files            |
 | `StudyStabilizationSeconds` | `30`                      | Config-only: seconds before a study is marked Complete |
 
 ---
 
 ## Database & WAL Mode
 
-ClariMed uses SQLite in **WAL (Write-Ahead Logging)** mode for safe concurrent access between background services and the Dashboard.
+FocusMed uses SQLite in **WAL (Write-Ahead Logging)** mode for safe concurrent access between background services and the Dashboard.
 
 **WAL PRAGMAs** (applied on every connection):
 ```sql
@@ -520,10 +520,10 @@ To ensure the system scales efficiently under large DICOM workloads, database in
 
 ```bash
 # Add a new migration
-dotnet ef migrations add <MigrationName> --project src\ClariMed.Data --startup-project src\ClariMed.Worker
+dotnet ef migrations add <MigrationName> --project src\FocusMed.Data --startup-project src\FocusMed.Worker
 
 # Apply migrations (also runs automatically on startup via db.Database.Migrate())
-dotnet ef database update --project src\ClariMed.Data --startup-project src\ClariMed.Worker
+dotnet ef database update --project src\FocusMed.Data --startup-project src\FocusMed.Worker
 ```
 
 ---
@@ -532,19 +532,19 @@ dotnet ef database update --project src\ClariMed.Data --startup-project src\Clar
 
 ```bash
 # Restore all NuGet packages
-dotnet restore D:\ClariMed\ClariMed.slnx
+dotnet restore D:\FocusMed\FocusMed.slnx
 
 # Build the entire solution
-dotnet build D:\ClariMed\ClariMed.slnx
+dotnet build D:\FocusMed\FocusMed.slnx
 
 # Run in console mode (keeps running until Ctrl+C)
-dotnet run --project src\ClariMed.Worker
+dotnet run --project src\FocusMed.Worker
 
 # Run with auto-reload on code changes (locks prevented)
-dotnet watch run --project src\ClariMed.Worker
+dotnet watch run --project src\FocusMed.Worker
 ```
 
-> **Important:** Use `D:\ClariMed\ClariMed.slnx` (not `.sln`). Tools that expect `.sln` will fail.
+> **Important:** Use `D:\FocusMed\FocusMed.slnx` (not `.sln`). Tools that expect `.sln` will fail.
 
 ### First Run
 
@@ -568,4 +568,4 @@ dotnet watch run --project src\ClariMed.Worker
 569. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
 570. **Crash Safety** — Global `UnhandledException` and `UnobservedTaskException` handlers in `Program.cs` cleanly exit the service on fatal errors instead of looping. Service loops execute within safe `try/catch` blocks.
 571. **Manual Stop Page** — A dedicated `/system-stop` page accessible via the sidebar to gracefully stop the background services and the Kestrel host via `IHostApplicationLifetime`.
-572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `ClariMed.Notifier` (a standalone WinForms tray app) alerts the user to updates and provides a context menu to reuse an existing browser tab (via PowerShell UIAutomation) or to run an update script.
+572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` (a standalone WinForms tray app) alerts the user to updates and provides a context menu to reuse an existing browser tab (via PowerShell UIAutomation) or to run an update script.

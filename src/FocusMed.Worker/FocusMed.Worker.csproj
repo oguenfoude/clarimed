@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-FocusMed.Worker-beba8e4e-f106-4c85-88f2-ff630bb97670</UserSecretsId>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FreeSpire.Doc" Version="14.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FocusMed.Dicom\FocusMed.Dicom.csproj" />
+    <ProjectReference Include="..\FocusMed.Imaging\FocusMed.Imaging.csproj" />
+    <ProjectReference Include="..\FocusMed.Printing\FocusMed.Printing.csproj" />
+    <ProjectReference Include="..\FocusMed.Data\FocusMed.Data.csproj" />
+    <ProjectReference Include="..\FocusMed.Documents\FocusMed.Documents.csproj" />
+    <ProjectReference Include="..\FocusMed.Dashboard\FocusMed.Dashboard.csproj" />
+  </ItemGroup>
+
+</Project>

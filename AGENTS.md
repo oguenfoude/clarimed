@@ -1,25 +1,25 @@
-# ClariMed — AGENTS.md
+# FocusMed — AGENTS.md
 
 ## Build & Run
 
-- **Solution**: `ClariMed.slnx` (XML-based, not `.sln`) — tools expecting `.sln` will fail.
+- **Solution**: `FocusMed.slnx` (XML-based, not `.sln`) — tools expecting `.sln` will fail.
 - **Target**: `net10.0-windows` — Windows-only.
-- **EF Core**: pinned to `8.0.0` despite `net10.0`. Migrations from `ClariMed.Data`:
+- **EF Core**: pinned to `8.0.0` despite `net10.0`. Migrations from `FocusMed.Data`:
   ```
-  dotnet ef migrations add <Name> --project src\ClariMed.Data --startup-project src\ClariMed.Worker
+  dotnet ef migrations add <Name> --project src\FocusMed.Data --startup-project src\FocusMed.Worker
   ```
-  Design-time factory uses `Data Source=db/clarimed.db`.
-- **Run**: `dotnet watch run --project src\ClariMed.Worker` — uses `launchSettings.json`, opens `http://localhost:5000`.
+  Design-time factory uses `Data Source=db/focusmed.db`.
+- **Run**: `dotnet watch run --project src\FocusMed.Worker` — uses `launchSettings.json`, opens `http://localhost:5000`.
 - **`UseAppHost=false`** in Worker `.csproj` prevents `dotnet watch` file-lock errors on `pdfium.dll`.
 - **No tests** — `tests/` dir is empty. No CI/CD.
 
 ## Architecture
 
-- **Worker** (`ClariMed.Worker`) is the sole orchestrator. 6 background services:
+- **Worker** (`FocusMed.Worker`) is the sole orchestrator. 6 background services:
   `DicomListenerService`, `DocumentProcessingService`, `DocumentWatcherService`, `StudyCompletionService`, `VirtualPrinterService`, `RecycleBinCleanupService`.
   All registered in `Program.cs`.
-- **9 projects** in solution. Worker references 7 directly. `ClariMed.Notifier` is a standalone WinForms app (`OutputType=WinExe`) that connects to the same DB.
-- **Dependency flow**: Worker → everything else. Libraries only depend on `ClariMed.Data` (except `ClariMed.Printing` and `ClariMed.Imaging` which are standalone).
+- **9 projects** in solution. Worker references 7 directly. `FocusMed.Notifier` is a standalone WinForms app (`OutputType=WinExe`) that connects to the same DB.
+- **Dependency flow**: Worker → everything else. Libraries only depend on `FocusMed.Data` (except `FocusMed.Printing` and `FocusMed.Imaging` which are standalone).
 - **Dashboard**: Razor Pages Areas pattern under `Areas/Dashboard/Pages/`. Served by Worker process.
 
 ## Database
@@ -28,7 +28,7 @@
 - **DB row takes precedence** over `appsettings.json` for most settings (loaded at service start). Exception: `StudyStabilizationSeconds` is config-only.
 - `ClinicSettingsRepository.GetAsync()` auto-seeds a default row if none exists.
 - `db.Database.Migrate()` runs on every startup in `Program.cs`.
-- `appsettings.json` default `DatabasePath` is `C:\ClariMed\clarimed.db`; Program.cs fallback is `db/clarimed.db`; design-time factory uses `db/clarimed.db`.
+- `appsettings.json` default `DatabasePath` is `C:\FocusMed\focusmed.db`; Program.cs fallback is `db/focusmed.db`; design-time factory uses `db/focusmed.db`.
 
 ## Key Conventions & Pitfalls
 
@@ -37,25 +37,25 @@
 - **FreeSpire.Doc** free version: 500 paragraph / 3 page limit per conversion. OK for cover sheets, not for long reports.
 - **QuestPDF** Community license: revenue < $1M/year. Set in `Program.cs`.
 - **DICOM C-STORE** on port 104 (requires Admin or `netsh urlacl`). Failure to bind logs a warning but does not crash the host — other services continue.
-- **Virtual Printer** is file-based, not IPP. `WindowsPrinterRegistration` registers a "ClariMed" Windows printer using "Microsoft Print To PDF" driver with a file port pointing to `VirtualPrint.pdf` in the watch folder. `VirtualPrinterService` uses `FileSystemWatcher` to detect that file, reads it, saves to `data/inbox`, and creates an `InboxDocument`. Requires Admin for PowerShell printer registration; failure is non-fatal.
+- **Virtual Printer** is file-based, not IPP. `WindowsPrinterRegistration` registers a "FocusMed" Windows printer using "Microsoft Print To PDF" driver with a file port pointing to `VirtualPrint.pdf` in the watch folder. `VirtualPrinterService` uses `FileSystemWatcher` to detect that file, reads it, saves to `data/inbox`, and creates an `InboxDocument`. Requires Admin for PowerShell printer registration; failure is non-fatal.
 - **`DicomFileIngestionService`** uses a `SemaphoreSlim(1,1)` for sequential DB upserts — single-threaded ingestion by design.
 - **`RecycleBinCleanupService`** runs every 12 hours, permanently deletes soft-deleted studies older than 30 days (files + DB records).
 
 ## DICOM / Test Files
 
 - Test DCM files are at `C:\Users\Administrator\Downloads\*.dcm`.
-- To ingest: drop into `D:\ClariMed\dcm\` dir, then use the Dashboard button, or send via DICOM C-STORE to port 104, or copy files and restart the app (auto-ingestion on startup is not implemented — no `--ingest` handler in `Program.cs`).
+- To ingest: drop into `D:\FocusMed\dcm\` dir, then use the Dashboard button, or send via DICOM C-STORE to port 104, or copy files and restart the app (auto-ingestion on startup is not implemented — no `--ingest` handler in `Program.cs`).
 - Duplicate prevention: `SopInstanceUid` unique index on `DicomImage`.
 
 ## File System (Runtime)
 
 ```
-C:\ClariMed\WatchFolder\   — drop .docx here (also VirtualPrint.pdf lands here)
-C:\ClariMed\Documents\     — converted PDFs
-C:\ClariMed\Output\        — merged PDFs
+C:\FocusMed\WatchFolder\   — drop .docx here (also VirtualPrint.pdf lands here)
+C:\FocusMed\Documents\     — converted PDFs
+C:\FocusMed\Output\        — merged PDFs
 
-D:\ClariMed\db\clarimed.db — SQLite database
-D:\ClariMed\data\archive\  — raw .dcm files
-D:\ClariMed\data\images\   — converted .png files
-D:\ClariMed\templates\     — pagegarde.docx cover template
+D:\FocusMed\db\focusmed.db — SQLite database
+D:\FocusMed\data\archive\  — raw .dcm files
+D:\FocusMed\data\images\   — converted .png files
+D:\FocusMed\templates\     — pagegarde.docx cover template
 ```

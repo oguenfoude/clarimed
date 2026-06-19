@@ -1,0 +1,78 @@
+@model FocusMed.Dashboard.Areas.Dashboard.Pages.RecycleBinModel
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-4" id="recyclebin-table">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th class="px-4 py-2.5">@Loc["RecycleBin_Col_Patient"]</th>
+                    <th class="px-4 py-2.5 hidden sm:table-cell">@Loc["RecycleBin_Col_Modality"]</th>
+                    <th class="px-4 py-2.5 hidden md:table-cell">@Loc["RecycleBin_Col_Date"]</th>
+                    <th class="px-4 py-2.5">@Loc["RecycleBin_Col_DeletedAt"]</th>
+                    <th class="px-4 py-2.5 text-right">@Loc["RecycleBin_Col_Actions"]</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                @if (Model.DeletedStudies.Count == 0)
+                {
+                    <tr>
+                        <td colspan="5" class="px-4 py-16 text-center">
+                            <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <p class="text-sm font-bold text-slate-700">@Loc["RecycleBin_Empty"]</p>
+                            <p class="text-xs font-medium text-slate-400 mt-1">@Loc["RecycleBin_EmptyDesc"]</p>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var s in Model.DeletedStudies)
+                    {
+                        <tr class="group hover:bg-slate-50/50 transition-colors">
+                            <td class="px-4 py-2.5 align-middle">
+                                <div class="font-bold text-slate-800 text-xs">@s.PatientName</div>
+                                <div class="text-[10px] text-slate-400 font-semibold mt-0.5">@s.PatientId</div>
+                            </td>
+                            <td class="px-4 py-2.5 align-middle hidden sm:table-cell">
+                                <span class="px-2 py-0.5 rounded border border-slate-200 bg-white text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                                    @s.Modality
+                                </span>
+                            </td>
+                            <td class="px-4 py-2.5 align-middle hidden md:table-cell">
+                                <div class="text-[11px] font-bold text-slate-500">
+                                    @(s.StudyDate?.ToString("MMM dd, yyyy") ?? "Unknown")
+                                </div>
+                            </td>
+                            <td class="px-4 py-2.5 align-middle">
+                                <div class="text-[10px] font-bold text-slate-500">
+                                    @s.CreatedAt.ToString("MMM dd, yyyy HH:mm")
+                                </div>
+                            </td>
+                            <td class="px-4 py-2.5 align-middle text-right">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <!-- Restore Button -->
+                                    <form method="post" asp-page-handler="Restore" asp-route-id="@s.Id">
+                                        <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-emerald-600 bg-white hover:bg-emerald-50 rounded-lg transition-all border border-emerald-200 hover:border-emerald-300 shadow-sm">
+                                            @Loc["RecycleBin_Btn_Restore"]
+                                        </button>
+                                    </form>
+
+                                    <!-- Permanent Delete Button -->
+                                    <form method="post" asp-page-handler="ForceDelete" asp-route-id="@s.Id" 
+                                          onsubmit="return confirm('@Html.Raw(Loc["RecycleBin_ConfirmDelete"])');">
+                                        <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-lg transition-all shadow-sm">
+                                            @Loc["RecycleBin_Btn_DeleteForever"]
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

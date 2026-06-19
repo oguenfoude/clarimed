@@ -7,9 +7,9 @@ class Program
 {
     static void Main(string[] args)
     {
-        Console.WriteLine("ClariMed Seeder - Injecting Fake Data...");
+        Console.WriteLine("FocusMed Seeder - Injecting Fake Data...");
         
-        string dbPath = @"D:\ClariMed\src\ClariMed.Worker\db\clarimed.db";
+        string dbPath = @"D:\FocusMed\src\FocusMed.Worker\db\focusmed.db";
         using var connection = new SqliteConnection($"Data Source={dbPath}");
         connection.Open();
 

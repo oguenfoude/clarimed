@@ -1,0 +1,6 @@
+@using Microsoft.AspNetCore.Mvc.RazorPages
+@using Microsoft.AspNetCore.Authorization
+@namespace FocusMed.Dashboard.Areas.Dashboard.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@inject FocusMed.Dashboard.Services.ILocalizationService Loc
+@attribute [Authorize]

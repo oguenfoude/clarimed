@@ -1,0 +1,90 @@
+@model IReadOnlyList<FocusMed.Data.Models.User>?
+
+<div class="bg-white rounded-2xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+    <table class="w-full">
+        <thead>
+            <tr class="border-b border-slate-100">
+                <th class="text-left px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-wide">@Loc["Settings_Username"]</th>
+                <th class="text-left px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-wide">@Loc["Settings_DisplayName"]</th>
+                <th class="text-left px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-wide">@Loc["Settings_Role"]</th>
+                <th class="text-left px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-wide">@Loc["Settings_Status"]</th>
+                <th class="text-right px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-wide">@Loc["Settings_Actions"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model != null)
+            {
+                @foreach (var user in Model)
+                {
+                    <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <td class="px-6 py-3">
+                            <span class="text-sm font-bold text-slate-800">@user.Username</span>
+                        </td>
+                        <td class="px-6 py-3">
+                            <span class="text-sm font-medium text-slate-600">@user.DisplayName</span>
+                        </td>
+                        <td class="px-6 py-3">
+                            @if (user.Role == FocusMed.Data.Models.UserRole.Admin)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">Admin</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">User</span>
+                            }
+                        </td>
+                        <td class="px-6 py-3">
+                            @if (user.IsActive)
+                            {
+                                <span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center gap-1 text-xs font-bold text-slate-400">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> Inactive
+                                </span>
+                            }
+                        </td>
+                        <td class="px-6 py-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                @if (user.Username == "admin")
+                                {
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-slate-400" title="@Loc["Settings_DefaultAdminProtected"]">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                        @Loc["Settings_DefaultAdmin"]
+                                    </span>
+                                }
+                                else
+                                {
+                                    <!-- Toggle Active -->
+                                    <form method="post" hx-post="/settings?handler=ToggleUser" hx-target="#users-table" hx-swap="innerHTML" hx-vals='{"userId": "@user.Id"}' style="display:inline">
+                                        <input type="hidden" name="userId" value="@user.Id" />
+                                        @if (user.IsActive)
+                                        {
+                                            <button type="submit" class="px-3 py-1 text-xs font-bold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">@Loc["Settings_Deactivate"]</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="px-3 py-1 text-xs font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">@Loc["Settings_Activate"]</button>
+                                        }
+                                    </form>
+                                    <!-- Delete -->
+                                    <form method="post" hx-post="/settings?handler=DeleteUser" hx-target="#users-table" hx-swap="innerHTML" hx-confirm="@Loc["Settings_ConfirmDelete"]" style="display:inline">
+                                        <input type="hidden" name="userId" value="@user.Id" />
+                                        <button type="submit" class="px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg transition-colors">@Loc["Settings_Delete"]</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+    @if (Model == null || Model.Count == 0)
+    {
+        <div class="px-6 py-8 text-center text-sm text-slate-400 font-medium">No users found.</div>
+    }
+</div>
