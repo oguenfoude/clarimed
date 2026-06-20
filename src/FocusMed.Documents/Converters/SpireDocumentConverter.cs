@@ -26,7 +26,7 @@ public class SpireDocumentConverter : IDocumentConverter
 
         return await Task.Run(() =>
         {
-            var document = new Document();
+            using var document = new Document();
             document.LoadFromFile(docxPath);
             Directory.CreateDirectory(outputDir);
             var pdfPath = Path.Combine(outputDir, outputFileName + ".pdf");
@@ -41,7 +41,7 @@ public class SpireDocumentConverter : IDocumentConverter
     {
         return await Task.Run(() =>
         {
-            var document = new Document();
+            using var document = new Document();
             // FreeSpire.Doc expects format type on load from stream. Since the files from watch folder are .docx:
             document.LoadFromStream(docxStream, FileFormat.Docx);
             Directory.CreateDirectory(outputDir);

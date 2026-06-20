@@ -37,6 +37,10 @@ public class UpdateCheckerService : BackgroundService
             {
                 break;
             }
+            catch (HttpRequestException)
+            {
+                _logger.LogWarning("Update check skipped: No internet connection to GitHub API.");
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while checking for updates.");

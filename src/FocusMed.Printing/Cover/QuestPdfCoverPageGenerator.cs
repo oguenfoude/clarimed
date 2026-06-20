@@ -43,13 +43,19 @@ public class QuestPdfCoverPageGenerator : ICoverPageGenerator
             // ── Primary: use Word template ──
             if (File.Exists(_templatePath) && _templatePath.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
             {
-                var document = new Spire.Doc.Document();
+                using var document = new Spire.Doc.Document();
                 document.LoadFromFile(_templatePath);
                 
                 // Replace placeholders
                 document.Replace("{{PatientName}}", ctx.PatientName.ToUpper(), false, true);
-                var dateStr = ctx.StudyDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy");
-                document.Replace("{{StudyDate}}", dateStr, false, true);
+                
+                // Use DICOM study date for the study, and today's date for the print date
+                var studyDateStr = ctx.StudyDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy");
+                var todayStr = DateTime.Now.ToString("dd/MM/yyyy");
+                
+                document.Replace("{{StudyDate}}", studyDateStr, false, true);
+                document.Replace("{{Date}}", studyDateStr, false, true);
+                document.Replace("{{PrintDate}}", todayStr, false, true);
                 
                 // Convert to PDF
                 document.SaveToFile(filePath, Spire.Doc.FileFormat.PDF);
@@ -120,7 +126,7 @@ public class QuestPdfCoverPageGenerator : ICoverPageGenerator
                             InfoRow(inner, "Description", ctx.StudyDescription);
                             InfoRow(inner, "Modalité", ctx.Modality);
                             InfoRow(inner, "Date de l'Examen",
-                                ctx.StudyDate?.ToString("dd/MM/yyyy") ?? "N/A");
+                                ctx.StudyDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy"));
                             if (!string.IsNullOrWhiteSpace(ctx.AccessionNumber))
                                 InfoRow(inner, "Numéro d'Accession", ctx.AccessionNumber);
                         });

@@ -10,6 +10,7 @@ using FocusMed.Documents;
 using FocusMed.Imaging;
 using FocusMed.Printing;
 using FocusMed.Worker.Services;
+using FocusMed.Dashboard.Api;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +77,13 @@ builder.Services.AddFocusMedDicom();
 builder.Services.AddFocusMedDocuments();
 builder.Services.AddFocusMedPrinting();
 
+builder.Services.AddSingleton<FocusMed.Documents.Ingestion.IDocumentIngestionChannel>(sp => 
+{
+    var queue = sp.GetRequiredService<FocusMed.Documents.Ingestion.DocumentIngestionQueue>();
+    var logger = sp.GetRequiredService<ILogger<FocusMed.Documents.Ingestion.WatchFolderIngestionChannel>>();
+    return new FocusMed.Documents.Ingestion.WatchFolderIngestionChannel(queue, logger, watchFolderPath);
+});
+
 // ── Register Background Workers ──
 builder.Services.AddHostedService<DicomListenerService>();
 builder.Services.AddHostedService<DocumentProcessingService>();
@@ -112,11 +120,48 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
     db.Database.Migrate();
 
-    // Reset PrinterRegistered flag once on startup to force migration to port 5000
+    // Ensure the Virtual Printer is registered using the correct Local Port
+    var watchFolderPathStr = Path.GetFullPath(watchFolderPath);
+    var printerPortPath = Path.Combine(watchFolderPathStr, "incoming_print.pdf");
+    
+    Task.Run(() =>
+    {
+        try
+        {
+            var checkCmd = "Get-Printer -Name 'FocusMed' -ErrorAction Stop";
+            var psiCheck = new ProcessStartInfo("powershell", $"-NoProfile -Command \"{checkCmd}\"")
+            {
+                CreateNoWindow = true, UseShellExecute = false
+            };
+            var checkProc = Process.Start(psiCheck);
+            checkProc?.WaitForExit();
+            
+            if (checkProc?.ExitCode != 0)
+            {
+                Console.WriteLine("[INFO] FocusMed printer not found. Recreating...");
+                var psCmd = $"Remove-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; " +
+                            $"Add-PrinterPort -Name '{printerPortPath}' -ErrorAction SilentlyContinue; " +
+                            $"Add-Printer -Name 'FocusMed' -DriverName 'Microsoft Print To PDF' -PortName '{printerPortPath}'";
+                
+                var psiAdd = new ProcessStartInfo("powershell", $"-NoProfile -Command \"{psCmd}\"")
+                {
+                    CreateNoWindow = true, UseShellExecute = true, Verb = "runas" // Request admin if needed
+                };
+                var addProc = Process.Start(psiAdd);
+                addProc?.WaitForExit();
+                Console.WriteLine("[INFO] FocusMed printer recreated successfully.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARNING] Could not auto-create virtual printer: {ex.Message}");
+        }
+    });
+
     var settings = db.ClinicSettings.OrderBy(s => s.Id).FirstOrDefault();
     if (settings != null)
     {
-        settings.PrinterRegistered = false;
+        settings.PrinterRegistered = true;
         db.SaveChanges();
     }
 
@@ -171,16 +216,44 @@ app.MapGet("/", async context =>
 
 // Virtual Printer routes are no longer needed since we are using a local file port.
 
+app.MapQuickAssignEndpoints();
 app.MapRazorPages();
 
-// ── Auto-open browser ──
+// ── Auto-open browser & Auto-start Notifier ──
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     try
     {
         Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true });
+        
+        // Auto-launch the Notifier tray app so the user doesn't have to start it manually
+        var notifierPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.Notifier.exe"));
+        Console.WriteLine($"[DEBUG] Notifier path: {notifierPath}");
+        if (File.Exists(notifierPath))
+        {
+            var p = Process.GetProcessesByName("FocusMed.Notifier");
+            Console.WriteLine($"[DEBUG] Notifier processes running: {p.Length}");
+            if (p.Length == 0)
+            {
+                var pinfo = new ProcessStartInfo 
+                { 
+                    FileName = notifierPath, 
+                    WorkingDirectory = Path.GetDirectoryName(notifierPath),
+                    UseShellExecute = true 
+                };
+                var started = Process.Start(pinfo);
+                Console.WriteLine($"[DEBUG] Notifier started: {started != null}");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[DEBUG] Notifier exe not found at {notifierPath}");
+        }
     }
-    catch { /* Best effort */ }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DEBUG] Error starting processes: {ex}");
+    }
 });
 
 app.Run();

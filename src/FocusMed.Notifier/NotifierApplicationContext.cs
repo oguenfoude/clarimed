@@ -1,6 +1,8 @@
 using System.Diagnostics;
-using Microsoft.EntityFrameworkCore;
-using FocusMed.Data;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace FocusMed.Notifier;
 
@@ -12,9 +14,13 @@ public class NotifierApplicationContext : ApplicationContext
     private bool _hasUpdate = false;
     private string _latestVersion = "";
     private ToolStripMenuItem _updateMenuItem;
+    private readonly HttpClient _http;
+    private QuickAssignWindow? _currentAssignWindow;
+    private HashSet<int> _shownDocumentIds = new();
 
     public NotifierApplicationContext()
     {
+        _http = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
         _contextMenu = new ContextMenuStrip();
 
         var openMenuItem = new ToolStripMenuItem("Open Dashboard", null, OpenDashboard);
@@ -35,27 +41,49 @@ public class NotifierApplicationContext : ApplicationContext
         };
         _notifyIcon.DoubleClick += OpenDashboard;
 
-        _timer = new System.Windows.Forms.Timer { Interval = 60000 };
-        _timer.Tick += CheckForUpdates;
+        _timer = new System.Windows.Forms.Timer { Interval = 2000 };
+        _timer.Tick += async (s, e) => await PollPendingDocuments();
         _timer.Start();
+    }
 
-        CheckForUpdates(null, EventArgs.Empty);
+    private async Task PollPendingDocuments()
+    {
+        try
+        {
+            var pendingDocs = await _http.GetFromJsonAsync<JsonElement[]>("/api/quickassign/pending");
+            if (pendingDocs != null && pendingDocs.Length > 0)
+            {
+                foreach (var nextDoc in pendingDocs)
+                {
+                    var docId = nextDoc.GetProperty("id").GetInt32();
+
+                    // If we haven't shown a window for this document, and no window is currently open
+                    if (!_shownDocumentIds.Contains(docId) && _currentAssignWindow == null)
+                    {
+                        _shownDocumentIds.Add(docId);
+                        
+                        _currentAssignWindow = new QuickAssignWindow(docId);
+                        _currentAssignWindow.FormClosed += (s, e) => _currentAssignWindow = null;
+                        _currentAssignWindow.Show();
+                        _currentAssignWindow.Activate();
+                        break;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(@"D:\ClariMed\notifier_error.log", $"Poll Error: {ex}\n");
+        }
     }
 
     private void OpenDashboard(object? sender, EventArgs e)
     {
-        // PowerShell script to find an Edge/Chrome window with "FocusMed" in title and switch to it,
-        // or just start the URL if not possible.
-        // A simpler way to reuse an existing tab is to just launch the URL and let the browser handle it,
-        // but standard Process.Start always opens a new tab. 
-        // Using PowerShell UIAutomation to find and focus is robust.
         var script = @"
 $url = 'http://localhost:5000/dashboard'
 $title = 'FocusMed'
-# Try to find a process with the title
 $proc = Get-Process | Where-Object { $_.MainWindowTitle -match $title } | Select-Object -First 1
 if ($proc) {
-    # Activate window via interop
     Add-Type @'
         using System;
         using System.Runtime.InteropServices;
@@ -78,43 +106,10 @@ if ($proc) {
 
     private void ApplyUpdate(object? sender, EventArgs e)
     {
-        // 3d) When "Apply Update" is clicked, run a simple update.bat and exit the tray app.
         var batPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update.bat");
         File.WriteAllText(batPath, "@echo off\r\necho Updating FocusMed...\r\npause");
         Process.Start(new ProcessStartInfo(batPath) { UseShellExecute = true });
         Exit(sender, e);
-    }
-
-    private async void CheckForUpdates(object? sender, EventArgs e)
-    {
-        try
-        {
-            var dbPath = @"D:\FocusMed\db\focusmed.db";
-            if (!File.Exists(dbPath)) return; // Or whatever path
-
-            var optionsBuilder = new DbContextOptionsBuilder<FocusMedDbContext>();
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
-
-            using var db = new FocusMedDbContext(optionsBuilder.Options);
-            var settings = await db.ClinicSettings.OrderBy(s => s.Id).FirstOrDefaultAsync();
-            if (settings != null)
-            {
-                if (settings.UpdateAvailable && !_hasUpdate)
-                {
-                    _hasUpdate = true;
-                    _latestVersion = settings.LatestVersion;
-                    _updateMenuItem.Text = $"Apply Update ({_latestVersion})";
-                    _updateMenuItem.Visible = true;
-                    _notifyIcon.ShowBalloonTip(5000, "FocusMed Update", $"Update {_latestVersion} is available! Click to update.", ToolTipIcon.Info);
-                }
-                else if (!settings.UpdateAvailable && _hasUpdate)
-                {
-                    _hasUpdate = false;
-                    _updateMenuItem.Visible = false;
-                }
-            }
-        }
-        catch { }
     }
 
     private void Exit(object? sender, EventArgs e)

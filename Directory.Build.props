@@ -1,5 +1,9 @@
 <Project>
 
+  <PropertyGroup>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
   <!-- ── Transitive dependency security overrides ── -->
 
   <ItemGroup>

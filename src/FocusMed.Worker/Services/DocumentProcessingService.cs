@@ -112,17 +112,35 @@ public class DocumentProcessingService : BackgroundService
 
         try
         {
-            // Convert .docx → .pdf
-            var pdfPath = await _converter.ConvertDocxToPdfAsync(docxPath, outputDir, ct);
+            string pdfPath;
+            if (Path.GetExtension(docxPath).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                // File is already a PDF (e.g. from Virtual Printer)
+                var newPdfPath = Path.Combine(outputDir, incoming.FileName);
+                if (!docxPath.Equals(newPdfPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(docxPath, newPdfPath, true);
+                }
+                pdfPath = newPdfPath;
+                _logger.LogInformation("Document is already PDF, copied to: {Pdf}", pdfPath);
+            }
+            else
+            {
+                // Convert .docx → .pdf
+                pdfPath = await _converter.ConvertDocxToPdfAsync(docxPath, outputDir, ct);
+                _logger.LogInformation("Document converted: {Name} → {Pdf}", incoming.FileName, pdfPath);
+            }
 
             document.PdfFilePath = pdfPath;
             document.Status = DocumentStatus.Converted;
             document.ConvertedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Document converted: {Name} → {Pdf}", incoming.FileName, pdfPath);
-
-
+            // If the file came from WatchFolder, delete the original so the next print is a new Create event
+            if (!string.IsNullOrEmpty(incoming.SourcePath) && File.Exists(incoming.SourcePath))
+            {
+                try { File.Delete(incoming.SourcePath); } catch { /* Ignore locked file */ }
+            }
         }
         catch (Exception ex)
         {

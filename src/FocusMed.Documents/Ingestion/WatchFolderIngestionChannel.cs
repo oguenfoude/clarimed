@@ -39,7 +39,7 @@ public sealed class WatchFolderIngestionChannel : IDocumentIngestionChannel, IDi
     {
         Directory.CreateDirectory(_folderPath);
 
-        _watcher = new FileSystemWatcher(_folderPath, "*.docx")
+        _watcher = new FileSystemWatcher(_folderPath, "*.*")
         {
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime,
             EnableRaisingEvents = true,
@@ -96,8 +96,13 @@ public sealed class WatchFolderIngestionChannel : IDocumentIngestionChannel, IDi
     /// </summary>
     private void OnFileCreated(object sender, FileSystemEventArgs e)
     {
-        _logger.LogDebug("File detected: {Name}", e.Name);
-        _fileBuffer.Enqueue(e.FullPath);
+        var ext = Path.GetExtension(e.FullPath);
+        if (ext.Equals(".docx", StringComparison.OrdinalIgnoreCase) || 
+            ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("File detected by WatchFolder: {Name}", e.Name);
+            _fileBuffer.Enqueue(e.FullPath);
+        }
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs e)

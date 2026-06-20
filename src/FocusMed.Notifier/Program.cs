@@ -8,9 +8,14 @@ static class Program
     [STAThread]
     static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        ApplicationConfiguration.Initialize();
-        Application.Run(new NotifierApplicationContext());
+        try
+        {
+            ApplicationConfiguration.Initialize();
+            Application.Run(new NotifierApplicationContext());
+        }
+        catch (Exception ex)
+        {
+            System.IO.File.WriteAllText(@"D:\ClariMed\crash.log", ex.ToString());
+        }
     }    
 }

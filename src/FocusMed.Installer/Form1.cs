@@ -272,6 +272,13 @@ namespace FocusMed.Installer
                 RunCmd("sc", $"create FocusMed binPath= \"{workerExe}\" start= auto");
                 RunCmd("sc", "description FocusMed \"FocusMed Clinical Platform Background Worker\"");
                 
+                UpdateStatus("Configuring Virtual Printer...");
+                string portName = Path.Combine(dataDir, @"WatchFolder\incoming_print.pdf");
+                string psCmd = $"Remove-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; " +
+                               $"Add-PrinterPort -Name '{portName}' -ErrorAction SilentlyContinue; " +
+                               $"Add-Printer -Name 'FocusMed' -DriverName 'Microsoft Print To PDF' -PortName '{portName}'";
+                RunCmd("powershell", $"-NoProfile -Command \"{psCmd}\"");
+                
                 UpdateStatus("Starting Windows Service...");
                 RunCmd("sc", "start FocusMed");
 
