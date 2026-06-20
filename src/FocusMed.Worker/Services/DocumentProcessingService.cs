@@ -73,7 +73,7 @@ public class DocumentProcessingService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
 
-        var outputDir = _configuration["FocusMed:DocumentOutputPath"] ?? @"C:\FocusMed\Documents";
+        var outputDir = _configuration["FocusMed:DocumentOutputPath"] ?? "data/Documents";
         Directory.CreateDirectory(outputDir);
 
         // Determine the source file path

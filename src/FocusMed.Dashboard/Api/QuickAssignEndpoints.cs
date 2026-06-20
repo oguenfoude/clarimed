@@ -107,73 +107,11 @@ public static class QuickAssignEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // 4. POST /api/quickassign/{id}/new-patient-and-assign
-        group.MapPost("/{id:int}/new-patient-and-assign", async (int id, [FromBody] NewPatientAssignRequest req, FocusMedDbContext db) =>
-        {
-            var doc = await db.Documents.FirstOrDefaultAsync(d => d.Id == id);
-            if (doc == null) return Results.NotFound("Document not found.");
 
-            using var transaction = await db.Database.BeginTransactionAsync();
-
-            try
-            {
-                // Find or create patient
-                Patient? patient = null;
-                if (!string.IsNullOrWhiteSpace(req.PatientCode))
-                {
-                    patient = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == req.PatientCode);
-                }
-
-                if (patient == null)
-                {
-                    patient = new Patient
-                    {
-                        Name = req.Name,
-                        PatientId = !string.IsNullOrWhiteSpace(req.PatientCode) ? req.PatientCode : $"MANUAL-{DateTime.UtcNow:yyyyMMddHHmmss}",
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    db.Patients.Add(patient);
-                    await db.SaveChangesAsync(); // save to get Id
-                }
-
-                // Create Manual Study
-                var study = new Study
-                {
-                    PatientId = patient.Id,
-                    StudyInstanceUid = $"MANUAL-{Guid.NewGuid()}",
-                    Modality = "Manual",
-                    StudyDate = DateTime.UtcNow,
-                    AccessionNumber = $"ACC-{DateTime.UtcNow:yyyyMMddHHmmss}",
-                    CreatedAt = DateTime.UtcNow,
-                    Status = StudyStatus.Complete // Manual studies are instantly complete
-                };
-                db.Studies.Add(study);
-                await db.SaveChangesAsync(); // save to get Id
-
-                // Assign document
-                doc.StudyId = study.Id;
-                await db.SaveChangesAsync();
-
-                await transaction.CommitAsync();
-
-                return Results.Ok(new { success = true, studyId = study.Id });
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                return Results.Problem(ex.Message);
-            }
-        });
     }
 }
 
 public class AssignRequest
 {
     public int StudyId { get; set; }
-}
-
-public class NewPatientAssignRequest
-{
-    public string Name { get; set; } = string.Empty;
-    public string? PatientCode { get; set; }
 }

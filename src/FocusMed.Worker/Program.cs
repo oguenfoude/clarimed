@@ -58,10 +58,10 @@ builder.Services.AddWindowsService(options =>
 
 // ── Read configuration ──
 var config = builder.Configuration.GetSection("FocusMed");
-var databasePath = config.GetValue<string>("DatabasePath") ?? "db/focusmed.db";
-var watchFolderPath = config.GetValue<string>("WatchFolderPath") ?? @"C:\FocusMed\WatchFolder";
-var documentOutputPath = config.GetValue<string>("DocumentOutputPath") ?? @"C:\FocusMed\Documents";
-var archivePath = config.GetValue<string>("ArchivePath") ?? "data/archive";
+var databasePath = Path.GetFullPath(config.GetValue<string>("DatabasePath") ?? "data/db/focusmed.db");
+var watchFolderPath = Path.GetFullPath(config.GetValue<string>("WatchFolderPath") ?? "data/WatchFolder");
+var documentOutputPath = Path.GetFullPath(config.GetValue<string>("DocumentOutputPath") ?? "data/Documents");
+var archivePath = Path.GetFullPath(config.GetValue<string>("ArchivePath") ?? "data/archive");
 
 // ── Ensure essential directories exist ──
 var dataDir = Path.GetDirectoryName(Path.GetFullPath(databasePath));
@@ -124,11 +124,11 @@ using (var scope = app.Services.CreateScope())
     var watchFolderPathStr = Path.GetFullPath(watchFolderPath);
     var printerPortPath = Path.Combine(watchFolderPathStr, "incoming_print.pdf");
     
-    Task.Run(() =>
+    _ = Task.Run(() =>
     {
         try
         {
-            var checkCmd = "Get-Printer -Name 'FocusMed' -ErrorAction Stop";
+            var checkCmd = $"$p = Get-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; if ($p -and $p.PortName -eq '{printerPortPath}') {{ exit 0 }} else {{ exit 1 }}";
             var psiCheck = new ProcessStartInfo("powershell", $"-NoProfile -Command \"{checkCmd}\"")
             {
                 CreateNoWindow = true, UseShellExecute = false
@@ -138,7 +138,7 @@ using (var scope = app.Services.CreateScope())
             
             if (checkProc?.ExitCode != 0)
             {
-                Console.WriteLine("[INFO] FocusMed printer not found. Recreating...");
+                Console.WriteLine("[INFO] FocusMed printer not found or port mismatched. Recreating...");
                 var psCmd = $"Remove-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; " +
                             $"Add-PrinterPort -Name '{printerPortPath}' -ErrorAction SilentlyContinue; " +
                             $"Add-Printer -Name 'FocusMed' -DriverName 'Microsoft Print To PDF' -PortName '{printerPortPath}'";
@@ -186,7 +186,7 @@ FellowOakDicom.DicomSetupBuilder.UseServiceProvider(app.Services);
 app.UseStaticFiles();
 
 // Serve DICOM images
-var imagesPath = config.GetValue<string>("ImagesPath") ?? Path.GetFullPath("data/images");
+var imagesPath = Path.GetFullPath(config.GetValue<string>("ImagesPath") ?? "data/images");
 Directory.CreateDirectory(imagesPath);
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -233,17 +233,19 @@ app.Lifetime.ApplicationStarted.Register(() =>
         {
             var p = Process.GetProcessesByName("FocusMed.Notifier");
             Console.WriteLine($"[DEBUG] Notifier processes running: {p.Length}");
-            if (p.Length == 0)
+            foreach (var proc in p)
             {
-                var pinfo = new ProcessStartInfo 
-                { 
-                    FileName = notifierPath, 
-                    WorkingDirectory = Path.GetDirectoryName(notifierPath),
-                    UseShellExecute = true 
-                };
-                var started = Process.Start(pinfo);
-                Console.WriteLine($"[DEBUG] Notifier started: {started != null}");
+                try { proc.Kill(); } catch { }
             }
+            
+            var pinfo = new ProcessStartInfo 
+            { 
+                FileName = notifierPath, 
+                WorkingDirectory = Path.GetDirectoryName(notifierPath),
+                UseShellExecute = true 
+            };
+            var started = Process.Start(pinfo);
+            Console.WriteLine($"[DEBUG] Notifier started: {started != null}");
         }
         else
         {
@@ -254,6 +256,20 @@ app.Lifetime.ApplicationStarted.Register(() =>
     {
         Console.WriteLine($"[DEBUG] Error starting processes: {ex}");
     }
+});
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    try
+    {
+        var p = Process.GetProcessesByName("FocusMed.Notifier");
+        foreach (var proc in p)
+        {
+            try { proc.Kill(); } catch { }
+        }
+        Console.WriteLine("[DEBUG] Notifier processes killed on shutdown.");
+    }
+    catch { }
 });
 
 app.Run();

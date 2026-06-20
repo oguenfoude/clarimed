@@ -15,7 +15,7 @@ public class ClinicSettings
     public int ArchiveIntervalMonths { get; set; } = 3;
 
     /// <summary>Folder monitored by the DocumentWatcher for incoming .docx files.</summary>
-    public string WatchFolderPath { get; set; } = @"C:\FocusMed\WatchFolder";
+    public string WatchFolderPath { get; set; } = "data/WatchFolder";
 
     /// <summary>UI language: "en" or "fr".</summary>
     public string Language { get; set; } = "en";

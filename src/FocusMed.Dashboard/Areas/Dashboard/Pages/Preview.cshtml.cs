@@ -12,6 +12,7 @@ using FocusMed.Printing.Merging;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -29,6 +30,7 @@ public class PreviewModel : PageModel
     private readonly IClinicSettingsRepository _settingsRepo;
     private readonly ICoverPageGenerator _coverGenerator;
     private readonly IPdfMerger _pdfMerger;
+    private readonly IConfiguration _config;
 
 
     public Study? Study { get; set; }
@@ -40,12 +42,14 @@ public class PreviewModel : PageModel
         FocusMedDbContext db,
         IClinicSettingsRepository settingsRepo,
         ICoverPageGenerator coverGenerator,
-        IPdfMerger pdfMerger)
+        IPdfMerger pdfMerger,
+        IConfiguration config)
     {
         _db = db;
         _settingsRepo = settingsRepo;
         _coverGenerator = coverGenerator;
         _pdfMerger = pdfMerger;
+        _config = config;
     }
 
     public async Task<IActionResult> OnGetAsync(int id)
@@ -129,7 +133,7 @@ public class PreviewModel : PageModel
         QuestPDF.Settings.License = LicenseType.Community;
         string reportPdfPath = Path.Combine(outputDir, $"plates_{Guid.NewGuid()}.pdf");
 
-        var imagesDir = Path.GetFullPath(Path.Combine("data", "images"));
+        var imagesDir = Path.GetFullPath(_config["FocusMed:ImagesPath"] ?? Path.Combine("data", "images"));
         var absPaths = new List<string>();
         foreach (var p in request.OrderedImagePaths)
         {
@@ -199,7 +203,7 @@ public class PreviewModel : PageModel
     {
         if (string.IsNullOrEmpty(path)) return NotFound();
         
-        var imagesDir = Path.GetFullPath(Path.Combine("data", "images"));
+        var imagesDir = Path.GetFullPath(_config["FocusMed:ImagesPath"] ?? Path.Combine("data", "images"));
         var rel = path.Replace("/dicom-images/", "").Replace("/", "\\").TrimStart('\\');
         var absPath = Path.Combine(imagesDir, rel);
 
@@ -248,7 +252,7 @@ public class PreviewModel : PageModel
         var doc = await _db.Documents.FindAsync(docId);
         if (doc == null || string.IsNullOrEmpty(doc.PdfFilePath) || !System.IO.File.Exists(doc.PdfFilePath))
             return NotFound();
-        return PhysicalFile(doc.PdfFilePath, "application/pdf");
+        return PhysicalFile(Path.GetFullPath(doc.PdfFilePath), "application/pdf");
     }
 
     public async Task<IActionResult> OnPostRemoveDocumentAsync(int studyId, int docId)

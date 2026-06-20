@@ -33,3 +33,16 @@ msbuild.binlog
 packages/
 *.nupkg
 publish/
+
+# Installer & Release Outputs
+dist/
+Payload.zip
+*.exe
+
+# Logs
+notifier_error.log
+*.log
+
+# Windows temp
+*.tmp
+*.bak

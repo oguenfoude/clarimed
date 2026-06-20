@@ -15,10 +15,7 @@ public class QuickAssignWindow : Form
 
     private TextBox _searchBox;
     private DataGridView _grid;
-    private Panel _newPatientPanel;
-    private TextBox _newNameBox;
-    private TextBox _newCodeBox;
-    private Button _btnNewPatient;
+
     private System.Windows.Forms.Timer _debounceTimer;
     private Label _lblStatus;
     private ProgressBar _progressBar;
@@ -224,35 +221,4 @@ public class QuickAssignWindow : Form
         }
     }
 
-    private async Task CreateNewPatientAndAssign()
-    {
-        var name = _newNameBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            MessageBox.Show("Patient Name is required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var code = _newCodeBox.Text.Trim();
-        try
-        {
-            SetLoading(true, "Creating patient and assigning document...");
-            var res = await _http.PostAsJsonAsync($"/api/quickassign/{_inboxDocumentId}/new-patient-and-assign", new { Name = name, PatientCode = string.IsNullOrWhiteSpace(code) ? null : code });
-            if (res.IsSuccessStatusCode)
-            {
-                MessageBox.Show("Patient created and document assigned successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                this.Close();
-            }
-            else
-            {
-                MessageBox.Show("Failed to create new patient.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetLoading(false, "Error creating patient");
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            SetLoading(false, "Error creating patient");
-        }
-    }
 }

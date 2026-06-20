@@ -42,7 +42,7 @@ FocusMed runs as a Windows Service and operates parallel, fully asynchronous pip
 ```mermaid
 flowchart TD
     Modality["DICOM Modality\n(X-Ray, CT, MRI)"]
-    WatchFolder["C:/FocusMed/WatchFolder\n(.docx files)"]
+    WatchFolder["./data/WatchFolder\n(.docx files)"]
     PrintClient["Print Client\n(Windows)"]
     Browser["Web Browser\nhttp://localhost:5000"]
 
@@ -449,18 +449,15 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 ## File System Layout
 
 ```
-C:\FocusMed\
-├── WatchFolder\          ← Drop .docx files here (also VirtualPrint.pdf lands here)
-├── Documents\            ← Converted PDFs (.docx → .pdf output)
-└── Output\               ← Final merged PDFs (Cover + Report + Images)
-
-D:\FocusMed\              ← Working directory
-├── db\
+./data/
+├── WatchFolder/          ← Drop .docx files here (also VirtualPrint.pdf lands here)
+├── Documents/            ← Converted PDFs (.docx → .pdf output)
+├── Output/               ← Final merged PDFs (Cover + Report + Images)
+├── db/
 │   └── focusmed.db       ← SQLite database (WAL mode)
-└── data\
-    ├── archive\          ← Raw .dcm files organized by Patient/Study/Series
-    ├── images\           ← Converted PNG files (mirror of archive structure)
-    └── inbox\            ← PDFs captured from the Virtual Printer
+├── archive/              ← Raw .dcm files organized by Patient/Study/Series
+├── images/               ← Converted PNG files (mirror of archive structure)
+└── inbox/                ← PDFs captured from the Virtual Printer
 ```
 
 ---
@@ -473,9 +470,9 @@ Settings live in `src/FocusMed.Worker/appsettings.json` (also overridden by the 
 | --------------------------- | ------------------------- | ------------------------------------------------------ |
 | `DicomPort`                 | `104`                     | TCP port the DICOM C-STORE SCP listens on              |
 | `AETitle`                   | `FOCUSMED`                | DICOM Application Entity Title                         |
-| `DatabasePath`              | `C:\FocusMed\focusmed.db` | Path to SQLite database file                           |
+| `DatabasePath`              | `data/db/focusmed.db`     | Path to SQLite database file                           |
 | `ArchivePath`               | `data/archive`            | Root path for raw `.dcm` file storage                  |
-| `WatchFolderPath`           | `C:\FocusMed\WatchFolder` | Folder monitored for incoming `.docx` files            |
+| `WatchFolderPath`           | `data/WatchFolder`        | Folder monitored for incoming `.docx` files            |
 | `StudyStabilizationSeconds` | `30`                      | Config-only: seconds before a study is marked Complete |
 
 ---
@@ -568,4 +565,4 @@ dotnet watch run --project src\FocusMed.Worker
 569. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
 570. **Crash Safety** — Global `UnhandledException` and `UnobservedTaskException` handlers in `Program.cs` cleanly exit the service on fatal errors instead of looping. Service loops execute within safe `try/catch` blocks.
 571. **Manual Stop Page** — A dedicated `/system-stop` page accessible via the sidebar to gracefully stop the background services and the Kestrel host via `IHostApplicationLifetime`.
-572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` (a standalone WinForms tray app) alerts the user to updates and provides a context menu to reuse an existing browser tab (via PowerShell UIAutomation) or to run an update script.
+572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` (a standalone WinForms tray app) alerts the user to updates, and instantly pops up when a printed report arrives. To prevent state desync, the `FocusMed.Worker` explicitly terminates and restarts the tray app during any backend restarts.

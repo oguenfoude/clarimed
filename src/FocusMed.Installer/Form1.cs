@@ -20,6 +20,9 @@ namespace FocusMed.Installer
         private TextBox txtDataPath;
         private Button btnBrowseInstall;
         private Button btnBrowseData;
+        private CheckBox chkDesktopShortcut;
+        private CheckBox chkStartupShortcut;
+        private Button btnUninstall;
 
         public Form1()
         {
@@ -110,6 +113,24 @@ namespace FocusMed.Installer
             };
             btnBrowseData.Click += (s, e) => BrowseFolder(txtDataPath);
 
+            chkDesktopShortcut = new CheckBox
+            {
+                Text = "Create Desktop Shortcut",
+                Font = new Font("Segoe UI", 9),
+                Location = new Point(40, 290),
+                AutoSize = true,
+                Checked = true
+            };
+
+            chkStartupShortcut = new CheckBox
+            {
+                Text = "Auto-start FocusMed Notifier on boot",
+                Font = new Font("Segoe UI", 9),
+                Location = new Point(250, 290),
+                AutoSize = true,
+                Checked = true
+            };
+
             lblStatus = new Label
             {
                 Text = "Ready to install",
@@ -117,7 +138,7 @@ namespace FocusMed.Installer
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Size = new Size(530, 20),
-                Location = new Point(0, 310)
+                Location = new Point(0, 315)
             };
 
             progressBar = new ProgressBar
@@ -132,13 +153,26 @@ namespace FocusMed.Installer
                 Text = "Install Now",
                 Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 Size = new Size(150, 40),
-                Location = new Point(192, 380),
+                Location = new Point(120, 380),
                 BackColor = Color.FromArgb(14, 165, 233), // Tailwind blue-500
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             btnInstall.FlatAppearance.BorderSize = 0;
             btnInstall.Click += BtnInstall_Click;
+
+            btnUninstall = new Button
+            {
+                Text = "Uninstall System",
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Size = new Size(150, 40),
+                Location = new Point(280, 380),
+                BackColor = Color.FromArgb(239, 68, 68), // Tailwind red-500
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnUninstall.FlatAppearance.BorderSize = 0;
+            btnUninstall.Click += BtnUninstall_Click;
 
             this.Controls.Add(logoBox);
             this.Controls.Add(titleLabel);
@@ -148,9 +182,12 @@ namespace FocusMed.Installer
             this.Controls.Add(lblDataPath);
             this.Controls.Add(txtDataPath);
             this.Controls.Add(btnBrowseData);
+            this.Controls.Add(chkDesktopShortcut);
+            this.Controls.Add(chkStartupShortcut);
             this.Controls.Add(lblStatus);
             this.Controls.Add(progressBar);
             this.Controls.Add(btnInstall);
+            this.Controls.Add(btnUninstall);
         }
 
         private void BrowseFolder(TextBox targetTextBox)
@@ -181,8 +218,10 @@ namespace FocusMed.Installer
             
             string installPath = txtInstallPath.Text;
             string dataPath = txtDataPath.Text;
+            bool createDesktop = chkDesktopShortcut.Checked;
+            bool createStartup = chkStartupShortcut.Checked;
 
-            bool success = await Task.Run(() => PerformInstallation(installPath, dataPath));
+            bool success = await Task.Run(() => PerformInstallation(installPath, dataPath, createDesktop, createStartup));
             
             progressBar.Style = ProgressBarStyle.Continuous;
             progressBar.Value = 100;
@@ -193,17 +232,70 @@ namespace FocusMed.Installer
                 btnInstall.Text = "Close";
                 btnInstall.Click -= BtnInstall_Click;
                 btnInstall.Click += (s, args) => Application.Exit();
+                btnUninstall.Visible = false;
             }
             
             btnInstall.Enabled = true;
         }
 
-        private bool PerformInstallation(string targetDir, string dataDir)
+        private async void BtnUninstall_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(txtInstallPath.Text) || string.IsNullOrWhiteSpace(txtDataPath.Text))
+            {
+                MessageBox.Show("Please provide both installation and data paths to correctly identify uninstallation targets.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var confirmResult = MessageBox.Show(
+                "This will completely remove FocusMed application binaries, services, and the virtual printer.\n\n" +
+                "Patient Data and DICOM images in your Data Directory will NOT be deleted.\n\n" +
+                "Are you sure you want to proceed?", 
+                "Confirm Uninstall", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (confirmResult != DialogResult.Yes) return;
+
+            btnInstall.Enabled = false;
+            btnUninstall.Enabled = false;
+            txtInstallPath.Enabled = false;
+            txtDataPath.Enabled = false;
+            btnBrowseInstall.Enabled = false;
+            btnBrowseData.Enabled = false;
+            chkDesktopShortcut.Enabled = false;
+            chkStartupShortcut.Enabled = false;
+            
+            progressBar.Style = ProgressBarStyle.Marquee;
+            
+            string installPath = txtInstallPath.Text;
+            string dataPath = txtDataPath.Text;
+
+            bool success = await Task.Run(() => PerformUninstallation(installPath, dataPath));
+            
+            progressBar.Style = ProgressBarStyle.Continuous;
+            progressBar.Value = 100;
+
+            if (success)
+            {
+                lblStatus.Text = "Uninstallation Complete!";
+                btnUninstall.Text = "Close";
+                btnUninstall.Click -= BtnUninstall_Click;
+                btnUninstall.Click += (s, args) => Application.Exit();
+                btnInstall.Visible = false;
+            }
+            
+            btnUninstall.Enabled = true;
+        }
+
+        private bool PerformInstallation(string targetDir, string dataDir, bool createDesktop, bool createStartup)
         {
             try
             {
                 UpdateStatus("Stopping existing services...");
                 RunCmd("sc", "stop FocusMed");
+                var procs = Process.GetProcessesByName("FocusMed.Notifier");
+                foreach (var proc in procs)
+                {
+                    try { proc.Kill(); } catch { }
+                }
                 Task.Delay(2000).Wait(); // Wait for stop
                 
                 UpdateStatus("Extracting application files...");
@@ -282,14 +374,21 @@ namespace FocusMed.Installer
                 UpdateStatus("Starting Windows Service...");
                 RunCmd("sc", "start FocusMed");
 
-                UpdateStatus("Creating shortcuts...");
                 var notifierExe = Path.Combine(targetDir, @"Notifier\FocusMed.Notifier.exe");
                 
-                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                CreateShortcut(Path.Combine(desktopPath, "FocusMed Notifier.lnk"), notifierExe);
+                if (createDesktop)
+                {
+                    UpdateStatus("Creating Desktop shortcut...");
+                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                    CreateShortcut(Path.Combine(desktopPath, "FocusMed Notifier.lnk"), notifierExe);
+                }
 
-                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
-                CreateShortcut(Path.Combine(startupPath, "FocusMed Notifier.lnk"), notifierExe);
+                if (createStartup)
+                {
+                    UpdateStatus("Creating Startup shortcut...");
+                    string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                    CreateShortcut(Path.Combine(startupPath, "FocusMed Notifier.lnk"), notifierExe);
+                }
 
                 UpdateStatus("Launching Notifier...");
                 Process.Start(new ProcessStartInfo(notifierExe) { UseShellExecute = true });
@@ -300,6 +399,52 @@ namespace FocusMed.Installer
             {
                 MessageBox.Show($"Installation failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 UpdateStatus("Installation failed.");
+                return false;
+            }
+        }
+
+        private bool PerformUninstallation(string targetDir, string dataDir)
+        {
+            try
+            {
+                UpdateStatus("Stopping services and applications...");
+                RunCmd("sc", "stop FocusMed");
+                var procs = Process.GetProcessesByName("FocusMed.Notifier");
+                foreach (var proc in procs)
+                {
+                    try { proc.Kill(); } catch { }
+                }
+                Task.Delay(2000).Wait(); // Wait for stops
+
+                UpdateStatus("Removing Windows Service...");
+                RunCmd("sc", "delete FocusMed");
+                Task.Delay(1000).Wait();
+
+                UpdateStatus("Removing Virtual Printer...");
+                string psCmd = "Remove-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue";
+                RunCmd("powershell", $"-NoProfile -Command \"{psCmd}\"");
+
+                UpdateStatus("Removing Desktop Shortcuts...");
+                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                string deskLink = Path.Combine(desktopPath, "FocusMed Notifier.lnk");
+                if (File.Exists(deskLink)) File.Delete(deskLink);
+
+                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                string startLink = Path.Combine(startupPath, "FocusMed Notifier.lnk");
+                if (File.Exists(startLink)) File.Delete(startLink);
+
+                UpdateStatus("Deleting Application Binaries...");
+                if (Directory.Exists(targetDir))
+                {
+                    Directory.Delete(targetDir, true);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Uninstallation failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus("Uninstallation failed.");
                 return false;
             }
         }
