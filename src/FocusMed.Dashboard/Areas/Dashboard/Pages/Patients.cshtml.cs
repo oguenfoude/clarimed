@@ -52,12 +52,8 @@ public class PatientsModel : PageModel
 
     private async Task LoadAsync(FocusMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate, bool isInitialLoad)
     {
-        // Default to today if no dates and no other filters are provided (initial load)
-        if (isInitialLoad && string.IsNullOrEmpty(startDate) && string.IsNullOrEmpty(endDate) && string.IsNullOrEmpty(search))
-        {
-            startDate = DateTime.Today.ToString("yyyy-MM-dd");
-            endDate = DateTime.Today.ToString("yyyy-MM-dd");
-        }
+        // Do not force a default date filter on initial load.
+        // This ensures historical DICOM imports are visible immediately.
 
         StartDate = startDate;
         EndDate = endDate;

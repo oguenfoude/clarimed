@@ -59,9 +59,8 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
         var config = serviceProvider.GetRequiredService<IConfiguration>();
         _basePath = config["FocusMed:ArchivePath"] ?? "data/archive";
         _basePath = Path.GetFullPath(_basePath);
-        // Go up one level from 'archive' to find the 'images' folder
         var rootDataPath = Path.GetDirectoryName(_basePath) ?? "data";
-        _imagesPath = Path.Combine(rootDataPath, "images");
+        _imagesPath = config["FocusMed:ImagesPath"] ?? Path.Combine(rootDataPath, "images");
     }
 
     public Task OnReceiveAssociationRequestAsync(DicomAssociation association)

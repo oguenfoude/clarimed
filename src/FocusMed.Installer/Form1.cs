@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,6 +16,10 @@ namespace FocusMed.Installer
         private Label lblStatus;
         private ProgressBar progressBar;
         private PictureBox logoBox;
+        private TextBox txtInstallPath;
+        private TextBox txtDataPath;
+        private Button btnBrowseInstall;
+        private Button btnBrowseData;
 
         public Form1()
         {
@@ -24,7 +29,7 @@ namespace FocusMed.Installer
         private void InitializeComponent()
         {
             this.Text = "FocusMed Setup";
-            this.Size = new Size(500, 350);
+            this.Size = new Size(550, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -33,7 +38,7 @@ namespace FocusMed.Installer
             logoBox = new PictureBox
             {
                 Size = new Size(120, 120),
-                Location = new Point(190, 20),
+                Location = new Point(215, 20),
                 SizeMode = PictureBoxSizeMode.Zoom
             };
             
@@ -53,24 +58,72 @@ namespace FocusMed.Installer
                 Font = new Font("Segoe UI", 14, FontStyle.Bold),
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(480, 30),
+                Size = new Size(530, 30),
                 Location = new Point(0, 150)
             };
 
+            // Install Path UI
+            var lblInstallPath = new Label
+            {
+                Text = "Application Files Directory:",
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Location = new Point(40, 190),
+                AutoSize = true
+            };
+            
+            txtInstallPath = new TextBox
+            {
+                Text = @"C:\Program Files\FocusMed",
+                Location = new Point(40, 210),
+                Size = new Size(380, 23)
+            };
+
+            btnBrowseInstall = new Button
+            {
+                Text = "Browse...",
+                Location = new Point(430, 209),
+                Size = new Size(75, 25)
+            };
+            btnBrowseInstall.Click += (s, e) => BrowseFolder(txtInstallPath);
+
+            // Data Path UI
+            var lblDataPath = new Label
+            {
+                Text = "Database & DICOM Data Directory:",
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Location = new Point(40, 245),
+                AutoSize = true
+            };
+            
+            txtDataPath = new TextBox
+            {
+                Text = @"C:\FocusMedData",
+                Location = new Point(40, 265),
+                Size = new Size(380, 23)
+            };
+
+            btnBrowseData = new Button
+            {
+                Text = "Browse...",
+                Location = new Point(430, 264),
+                Size = new Size(75, 25)
+            };
+            btnBrowseData.Click += (s, e) => BrowseFolder(txtDataPath);
+
             lblStatus = new Label
             {
-                Text = "Ready to install to C:\\FocusMed",
+                Text = "Ready to install",
                 Font = new Font("Segoe UI", 9),
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(480, 20),
-                Location = new Point(0, 190)
+                Size = new Size(530, 20),
+                Location = new Point(0, 310)
             };
 
             progressBar = new ProgressBar
             {
-                Size = new Size(400, 20),
-                Location = new Point(42, 220),
+                Size = new Size(465, 20),
+                Location = new Point(40, 335),
                 Style = ProgressBarStyle.Continuous
             };
 
@@ -79,7 +132,7 @@ namespace FocusMed.Installer
                 Text = "Install Now",
                 Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 Size = new Size(150, 40),
-                Location = new Point(167, 260),
+                Location = new Point(192, 380),
                 BackColor = Color.FromArgb(14, 165, 233), // Tailwind blue-500
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
@@ -89,42 +142,73 @@ namespace FocusMed.Installer
 
             this.Controls.Add(logoBox);
             this.Controls.Add(titleLabel);
+            this.Controls.Add(lblInstallPath);
+            this.Controls.Add(txtInstallPath);
+            this.Controls.Add(btnBrowseInstall);
+            this.Controls.Add(lblDataPath);
+            this.Controls.Add(txtDataPath);
+            this.Controls.Add(btnBrowseData);
             this.Controls.Add(lblStatus);
             this.Controls.Add(progressBar);
             this.Controls.Add(btnInstall);
         }
 
+        private void BrowseFolder(TextBox targetTextBox)
+        {
+            using var fbd = new FolderBrowserDialog();
+            fbd.SelectedPath = targetTextBox.Text;
+            if (fbd.ShowDialog() == DialogResult.OK)
+            {
+                targetTextBox.Text = fbd.SelectedPath;
+            }
+        }
+
         private async void BtnInstall_Click(object? sender, EventArgs e)
         {
+            if (string.IsNullOrWhiteSpace(txtInstallPath.Text) || string.IsNullOrWhiteSpace(txtDataPath.Text))
+            {
+                MessageBox.Show("Please provide both installation and data paths.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             btnInstall.Enabled = false;
+            txtInstallPath.Enabled = false;
+            txtDataPath.Enabled = false;
+            btnBrowseInstall.Enabled = false;
+            btnBrowseData.Enabled = false;
+            
             progressBar.Style = ProgressBarStyle.Marquee;
             
-            await Task.Run(() => PerformInstallation());
+            string installPath = txtInstallPath.Text;
+            string dataPath = txtDataPath.Text;
+
+            bool success = await Task.Run(() => PerformInstallation(installPath, dataPath));
             
             progressBar.Style = ProgressBarStyle.Continuous;
             progressBar.Value = 100;
-            lblStatus.Text = "Installation Complete!";
-            btnInstall.Text = "Close";
-            btnInstall.Click -= BtnInstall_Click;
-            btnInstall.Click += (s, args) => Application.Exit();
+
+            if (success)
+            {
+                lblStatus.Text = "Installation Complete!";
+                btnInstall.Text = "Close";
+                btnInstall.Click -= BtnInstall_Click;
+                btnInstall.Click += (s, args) => Application.Exit();
+            }
+            
             btnInstall.Enabled = true;
         }
 
-        private void PerformInstallation()
+        private bool PerformInstallation(string targetDir, string dataDir)
         {
             try
             {
-                string targetDir = @"C:\FocusMed";
-                
                 UpdateStatus("Stopping existing services...");
                 RunCmd("sc", "stop FocusMed");
                 Task.Delay(2000).Wait(); // Wait for stop
                 
-                UpdateStatus("Extracting files...");
-                if (!Directory.Exists(targetDir))
-                {
-                    Directory.CreateDirectory(targetDir);
-                }
+                UpdateStatus("Extracting application files...");
+                if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+                if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
 
                 using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Payload.zip"))
                 {
@@ -136,7 +220,6 @@ namespace FocusMed.Installer
                         stream.CopyTo(fs);
                     }
                     
-                    // Overwrite extract
                     using (var archive = ZipFile.OpenRead(tempZip))
                     {
                         foreach (var entry in archive.Entries)
@@ -151,6 +234,32 @@ namespace FocusMed.Installer
                         }
                     }
                     File.Delete(tempZip);
+                }
+
+                UpdateStatus("Configuring application paths...");
+                string appSettingsPath = Path.Combine(targetDir, @"Worker\appsettings.json");
+                if (File.Exists(appSettingsPath))
+                {
+                    var jsonStr = File.ReadAllText(appSettingsPath);
+                    var jsonNode = JsonNode.Parse(jsonStr);
+                    if (jsonNode != null)
+                    {
+                        var focusMedNode = jsonNode["FocusMed"];
+                        if (focusMedNode == null)
+                        {
+                            focusMedNode = new JsonObject();
+                            jsonNode.AsObject().Add("FocusMed", focusMedNode);
+                        }
+
+                        // Inject the user's chosen absolute paths
+                        focusMedNode["DatabasePath"] = Path.Combine(dataDir, @"db\focusmed.db");
+                        focusMedNode["ArchivePath"] = Path.Combine(dataDir, @"archive");
+                        focusMedNode["ImagesPath"] = Path.Combine(dataDir, @"images");
+                        focusMedNode["WatchFolderPath"] = Path.Combine(dataDir, @"WatchFolder");
+                        focusMedNode["DocumentOutputPath"] = Path.Combine(dataDir, @"Documents");
+
+                        File.WriteAllText(appSettingsPath, jsonNode.ToString());
+                    }
                 }
 
                 UpdateStatus("Registering Windows Service...");
@@ -169,21 +278,22 @@ namespace FocusMed.Installer
                 UpdateStatus("Creating shortcuts...");
                 var notifierExe = Path.Combine(targetDir, @"Notifier\FocusMed.Notifier.exe");
                 
-                // Create Desktop Shortcut
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
                 CreateShortcut(Path.Combine(desktopPath, "FocusMed Notifier.lnk"), notifierExe);
 
-                // Create Startup Shortcut
                 string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
                 CreateShortcut(Path.Combine(startupPath, "FocusMed Notifier.lnk"), notifierExe);
 
                 UpdateStatus("Launching Notifier...");
                 Process.Start(new ProcessStartInfo(notifierExe) { UseShellExecute = true });
+                
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Installation failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 UpdateStatus("Installation failed.");
+                return false;
             }
         }
 
@@ -218,7 +328,6 @@ namespace FocusMed.Installer
         {
             try
             {
-                // Using WshShell via COM to create a shortcut without adding an external reference
                 Type t = Type.GetTypeFromProgID("WScript.Shell")!;
                 dynamic shell = Activator.CreateInstance(t)!;
                 var shortcut = shell.CreateShortcut(shortcutPath);

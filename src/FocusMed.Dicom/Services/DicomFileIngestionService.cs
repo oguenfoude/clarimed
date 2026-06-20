@@ -28,7 +28,7 @@ public class DicomFileIngestionService
         var config = serviceProvider.GetRequiredService<IConfiguration>();
         _archivePath = Path.GetFullPath(config["FocusMed:ArchivePath"] ?? "data/archive");
         var rootDataPath = Path.GetDirectoryName(_archivePath) ?? "data";
-        _imagesPath = Path.Combine(rootDataPath, "images");
+        _imagesPath = config["FocusMed:ImagesPath"] ?? Path.Combine(rootDataPath, "images");
     }
 
     public async Task<(int Success, int Failed)> IngestFolderAsync(string folderPath, CancellationToken ct = default)

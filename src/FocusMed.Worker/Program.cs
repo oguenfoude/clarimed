@@ -141,7 +141,7 @@ FellowOakDicom.DicomSetupBuilder.UseServiceProvider(app.Services);
 app.UseStaticFiles();
 
 // Serve DICOM images
-var imagesPath = Path.GetFullPath("data/images");
+var imagesPath = config.GetValue<string>("ImagesPath") ?? Path.GetFullPath("data/images");
 Directory.CreateDirectory(imagesPath);
 app.UseStaticFiles(new StaticFileOptions
 {
