@@ -1,6 +1,6 @@
 # FocusMed
 
-**Focus** + **Med**ical — A Windows Background Service for medical imaging and reporting with a Razor Pages dashboard (Areas pattern). Receives DICOM images from medical devices (X-Ray, CT, MRI), ingests `.docx` reports from a watch folder, receives PDFs via a built-in Virtual Printer, generates a professional PDF (cover page + report + images), and prints silently to a local Windows printer. Includes a secure web dashboard at `http://localhost:5000`.
+**Focus** + **Med**ical — A Windows Background Service for medical imaging and reporting with a Razor Pages dashboard (Areas pattern). Receives DICOM images from medical devices (X-Ray, CT, MRI), ingests `.docx` reports from a watch folder, generates a professional PDF (cover page + report + images in grid layout), and prints silently to a local Windows printer. Includes a secure web dashboard at `http://localhost:5000`.
 
 ---
 
@@ -14,12 +14,13 @@
 6. [Data Model](#data-model)
 7. [Authentication & User Management](#authentication--user-management)
 8. [Settings Dashboard](#settings-dashboard)
-9. [Technology Stack](#technology-stack)
-10. [File System Layout](#file-system-layout)
-11. [Configuration Reference](#configuration-reference)
-12. [Database & WAL Mode](#database--wal-mode)
-13. [Build, Run & Migrations](#build-run--migrations)
-14. [Core Optimizations](#core-optimizations)
+9. [Printing & Formats](#printing--formats)
+10. [Technology Stack](#technology-stack)
+11. [File System Layout](#file-system-layout)
+12. [Configuration Reference](#configuration-reference)
+13. [Database & WAL Mode](#database--wal-mode)
+14. [Build, Run & Migrations](#build-run--migrations)
+15. [Core Optimizations](#core-optimizations)
 
 ---
 
@@ -27,13 +28,12 @@
 
 FocusMed runs as a Windows Service and operates parallel, fully asynchronous pipelines, plus a secure Razor Pages dashboard:
 
-| Pipeline               | I    nput                                             | Output                                                           |
+| Pipeline               | Input                                             | Output                                                           |
 | ---------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
-| **DICOM Ingestion**    | Images from X-Ray / CT / MRI over TCP port 104    | `.dcm` archive + `.png` images + SQLite records                  |
+| **DICOM Ingestion**    | Images from X-Ray / CT / MRI over TCP port 1004    | `.dcm` archive + `.png` images + SQLite records                  |
 | **Document Ingestion** | `.docx` files dropped into a watch folder         | Converted `.pdf` + SQLite `Document` record                      |
-| **Virtual Printer**    | PDFs printed to "FocusMed" Windows printer        | PDF stored in `InboxDocument` waiting for assignment             |
 | **Merge & Print**      | Generated directly via Study Preview             | Final merged PDF (cover + report + images) → silent print        |
-| **Dashboard**          | Web browser at `http://localhost:5000`            | Secure study viewer, patient browser, inbox, settings, users     |
+| **Dashboard**          | Web browser at `http://localhost:5000`            | Secure study viewer, patient browser, settings, users            |
 
 ---
 
@@ -42,19 +42,18 @@ FocusMed runs as a Windows Service and operates parallel, fully asynchronous pip
 ```mermaid
 flowchart TD
     Modality["DICOM Modality\n(X-Ray, CT, MRI)"]
-    WatchFolder["./data/WatchFolder\n(.docx files)"]
-    PrintClient["Print Client\n(Windows)"]
+    WatchFolder["C:\ProgramData\FocusMed\data\WatchFolder\n(.docx files)"]
     Browser["Web Browser\nhttp://localhost:5000"]
 
     subgraph SVC["FocusMed Windows Service"]
         subgraph Worker["FocusMed.Worker"]
-            S1["① DicomListenerService"]
-            S2["② DocumentWatcherService"]
-            S3["③ DocumentProcessingService"]
-            S4["④ StudyCompletionService"]
-            S5["⑤ VirtualPrinterService"]
-            S6["⑥ RecycleBinCleanupService"]
-            S7["⑦ DicomRestartService"]
+            S1["DicomListenerService"]
+            S2["DocumentWatcherService"]
+            S3["DocumentProcessingService"]
+            S4["StudyCompletionService"]
+            S5["RecycleBinCleanupService"]
+            S6["DicomRestartService"]
+            S7["UpdateCheckerService"]
         end
 
         subgraph Dicom["FocusMed.Dicom"]
@@ -67,34 +66,30 @@ flowchart TD
             Conv["SpireDocumentConverter\n.docx → .pdf"]
         end
 
-        subgraph VPrinter["FocusMed.VirtualPrinter"]
-            Reg["WindowsPrinterRegistration\nFile-based virtual printer"]
-        end
-
         subgraph Print["FocusMed.Printing"]
             Cover["QuestPdfCoverPageGenerator"]
-            Merge["PdfSharpMerger\n(Cover + Report + Images)"]
+            Merge["PdfSharpMerger\n(Grid layout → A4/A3/Booklet)"]
+            SilentPrint["PdfiumSilentPrinter\n(Windows spooler)"]
         end
 
         subgraph Dash["FocusMed.Dashboard"]
             LoginPage["Login Page\n(Cookie Auth)"]
             Dashboard["Dashboard\n(Stats)"]
             Patients["Patients\n(Browser)"]
-            Preview["Preview\n(DICOM viewer + PDF)"]
-            Inbox["Inbox\n(Assign PDFs)"]
-            Settings["Settings\n(DICOM, Users, i18n)"]
+            Preview["Preview\n(Drag-reorder + Print/Download)"]
+            Settings["Settings\n(DICOM, Users, i18n, Printing)"]
             RecycleBin["Recycle Bin\n(Soft delete)"]
         end
 
         subgraph Data["FocusMed.Data"]
             DB[("SQLite\n(WAL mode)\nfocusmed.db")]
-            FS[/"File System\ndb/ archive/ images/ output/ inbox/"\]
+            FS[/"File System\ndb/ archive/ images/ output/"\]
         end
     end
 
-    Printer["Windows Printer"]
+    Printer["Windows Printer\n(A4 / A3 / Booklet queues)"]
 
-    Modality --"C-STORE\nTCP:104"--> S1 --> CStore
+    Modality --"C-STORE\nTCP:1004"--> S1 --> CStore
     CStore --"Upsert Patient/Study/Series/Image"--> DB
     CStore --"Save .dcm"--> FS
 
@@ -103,17 +98,14 @@ flowchart TD
     S3 --"ReadAllAsync"--> Q --> Conv --"save .pdf"--> FS
     S3 --"Document"--> DB
 
-    PrintClient --"Print to FocusMed\nVirtualPrint.pdf"--> S5 --> Reg
-    Reg --"InboxDocument"--> DB
-    Reg --"Save .pdf"--> FS
-
     S4 --"poll Receiving\nevery 10s"--> DB
     S4 --"Status=Complete"--> DB
 
     Browser --"Login\n(Cookie Auth)"--> LoginPage
     LoginPage --> Dashboard
     Browser --> Dash
-    Inbox --"Assign PDF to Study"--> DB
+    Preview --"POST /api/print/silent"--> Merge --> SilentPrint --> Printer
+    Preview --"POST /api/print/download"--> Merge
 ```
 
 ---
@@ -131,14 +123,26 @@ FocusMed/
 │   ├── FocusMed.Dicom/                   ← DICOM network layer (fo-dicom)
 │   ├── FocusMed.Documents/               ← Document watcher + Spire conversion
 │   ├── FocusMed.Imaging/                 ← DICOM pixel → PNG conversion
-│   ├── FocusMed.Printing/                ← PDF generation (QuestPDF + PdfSharpCore)
-│   ├── FocusMed.VirtualPrinter/          ← File-based virtual printer registration
+│   ├── FocusMed.Printing/                ← PDF generation (QuestPDF + PdfSharpCore + PdfiumViewer)
 │   ├── FocusMed.Dashboard/               ← Razor Pages web interface (Areas pattern)
-│   ├── FocusMed.Notifier/                ← Standalone WinForms tray app
+│   ├── FocusMed.Notifier/                ← Standalone WinForms tray app (auto-started by Worker)
 │   └── FocusMed.Worker/                  ← Windows Service orchestrator
+│
+├── templates/
+│   └── pagegarde.docx                    ← Cover page Word template
 │
 └── tests/
     └── (placeholder for FocusMed.Tests)
+```
+
+### Project Reference Graph
+
+```
+Worker → Dicom, Imaging, Printing, Data, Documents, Dashboard
+Dashboard → Data, Printing
+Dicom → Data, Imaging, Printing
+Documents → Data
+Notifier → Data
 ```
 
 ---
@@ -165,17 +169,12 @@ FocusMed/
 - `WatchFolderIngestionChannel` monitors for new `.docx` files.
 - `FreeSpire.Doc` performs headless `.docx` → `.pdf` conversion (3-page / 500-paragraph free tier limit).
 
-### FocusMed.VirtualPrinter
-
-- **File-based virtual printer**: `WindowsPrinterRegistration` registers a "FocusMed" Windows printer using "Microsoft Print To PDF" driver with a file port.
-- `VirtualPrinterService` uses `FileSystemWatcher` to detect `VirtualPrint.pdf`, reads it, saves to `data/inbox`, creates an `InboxDocument`.
-- Requires Admin for PowerShell printer registration; failure is non-fatal.
-
 ### FocusMed.Printing
 
 - **Cover page**: generated via QuestPDF using `pagegarde.docx` template (FreeSpire fallback).
-- **PDF Merge**: PdfSharpCore appends cover, report, and DICOM images onto A4 pages.
-- **Silent print**: PdfiumViewer submits to the Windows spooler.
+- **PDF Merge**: PdfSharpCore lays out images in a grid on A4 pages (configurable images per page, columns, gap), then optionally converts to A3 portrait or imposes for booklet (A3 landscape, saddle-stitch folding).
+- **Silent print**: PdfiumViewer submits to the Windows spooler. Paper size, tray, and finishing are controlled entirely by the pre-configured Windows printer queue defaults — no driver-specific code in the application.
+- **Print formats**: A4 (standard), A3 (portrait, scaled), Booklet (A3 landscape, front/back imposition).
 
 ### FocusMed.Dashboard
 
@@ -186,10 +185,18 @@ Razor Pages class library using the ASP.NET Core **Areas pattern**. All pages re
 | **Login** | `/login` | Cookie-based authentication (standalone, matches dashboard style) |
 | **Dashboard** | `/dashboard` | System metrics, today's modality breakdown, recent studies |
 | **Patients** | `/patients` | Searchable/filterable study directory (max 500 results) |
-| **Inbox** | `/inbox` | Virtual Printer inbox — assign PDFs to patient studies |
-| **Preview** | `/preview/{id}` | Full study viewer with drag-reorder, PDF generation, print |
+| **Preview** | `/preview/{id}` | Full study viewer: drag-reorder images, pick format, print or download |
 | **Recycle Bin** | `/recyclebin` | Soft-deleted studies — restore or permanent delete |
-| **Settings** | `/settings` | Clinic config, DICOM, file paths, user management (5 sections) |
+| **Settings** | `/settings` | Clinic config, DICOM, file paths, printing, user management |
+
+### FocusMed.Notifier
+
+Standalone WinForms system tray application. Auto-started by the Worker on launch. Features:
+
+- **Update checker**: Polls the dashboard for new release notifications.
+- **Quick-assign**: Detects unassigned converted documents and pops up a window to link them to a study.
+- **Single-instance**: Uses a named Mutex (`FocusMedApp`) to prevent duplicates.
+- **Auto-launch**: The Worker starts the Notifier if it's not already running.
 
 ---
 
@@ -197,13 +204,13 @@ Razor Pages class library using the ASP.NET Core **Areas pattern**. All pages re
 
 | #   | Service                     | What it does |
 | --- | --------------------------- | ------------ |
-| 1   | `DicomListenerService`      | Opens TCP port 104 as the configured AE Title. Keeps the DICOM server alive. |
+| 1   | `DicomListenerService`      | Opens TCP port 1004 as the configured AE Title. Keeps the DICOM server alive. |
 | 2   | `DocumentWatcherService`    | Calls `StartAsync` on every registered `IDocumentIngestionChannel`. |
 | 3   | `DocumentProcessingService` | Drains `DocumentIngestionQueue`. Converts `.docx` to PDF, saves `Document` record. |
 | 4   | `StudyCompletionService`    | Polls every 10s. Studies in `Receiving` older than stabilization window → `Complete`. |
-| 5   | `VirtualPrinterService`     | Detects `VirtualPrint.pdf` via `FileSystemWatcher`, imports as inbox document. |
-| 6   | `RecycleBinCleanupService`  | Every 12 hours. Permanently deletes soft-deleted studies > 30 days old. |
-| 7   | `DicomRestartService`       | Polls every 5s. When DICOM settings change, waits for idle → restarts server. |
+| 5   | `RecycleBinCleanupService`  | Every 12 hours. Permanently deletes soft-deleted studies > 30 days old. |
+| 6   | `DicomRestartService`       | Polls every 5s. When DICOM settings change, waits for idle → restarts server. |
+| 7   | `UpdateCheckerService`      | Polls GitHub every hour for new releases. Stores result in `ClinicSettings`. |
 
 ---
 
@@ -215,7 +222,6 @@ erDiagram
     STUDY ||--o{ SERIES : "contains"
     SERIES ||--o{ DICOM-IMAGE : "holds"
     DOCUMENT }o--o| STUDY : "links to"
-    STUDY ||--o| INBOX-DOCUMENT : "assigns"
     USER {
         int Id PK
         string Username UK
@@ -239,6 +245,9 @@ erDiagram
         string AETitle
         int DicomPort
         string Language
+        string PrinterA4
+        string PrinterA3
+        string PrinterBooklet
         bool DicomSettingsPendingRestart
     }
 ```
@@ -260,7 +269,7 @@ erDiagram
 | Role | Permissions |
 |------|------------|
 | **Admin** (doctor) | Full access: all settings sections, DICOM config, user management |
-| **User** (technician) | View-only: Dashboard, Patients, Preview, Inbox. No settings access. |
+| **User** (technician) | View-only: Dashboard, Patients, Preview. No settings access. |
 
 ### User Management (Admin only)
 
@@ -273,160 +282,80 @@ erDiagram
 
 ## Settings Dashboard
 
-The Settings page (`/settings`) is a tabbed HTMX-driven interface with a left sidebar and right content area. It uses a single `SettingsModel` PageModel (`Settings.cshtml.cs`) with partial views for each section. All text is localized via `ILocalizationService` (`@Loc["..."]` tag helper) with English (`en.json`) and French (`fr.json`) translation files. The entire class is decorated with `[IgnoreAntiforgeryToken]` for HTMX form compatibility. Global `[Authorize]` (from `_ViewImports.cshtml`) requires login; the Users section is further gated by `IsAdmin`.
-
-### Settings Code-Behind (`SettingsModel`)
-
-The PageModel at `Settings.cshtml.cs` creates a scoped DI resolution per request via `IServiceScopeFactory`. It resolves two repositories:
-
-- **`IClinicSettingsRepository`** — singleton settings row (`ClinicSettings` entity); auto-seeds default row on first access if none exists.
-- **`IUserRepository`** — CRUD for `User` entities with BCrypt password hashing.
-
-Key public properties exposed to the Razor view:
-
-| Property | Type | Default | Purpose |
-|---|---|---|---|
-| `Settings` | `ClinicSettings?` | `null` | Full settings object loaded from DB |
-| `Lang` | `string` | `"en"` | Current language code (extracted from `Settings.Language`) |
-| `ActiveSection` | `string` | `"general"` | Which tab is active: `general`, `dicom`, or `users` |
-| `Users` | `IReadOnlyList<User>?` | `null` | All users (loaded only for the `users` section) |
-| `LocalIpAddress` | `string` | `"127.0.0.1"` | Server's local IPv4 (resolved via `Dns.GetHostEntry`) |
-| `IsAdmin` | `bool` | computed | `true` if current user has the `"Admin"` role |
-
-### Settings Page Handlers
-
-#### GET Handlers
-
-| Handler | Purpose |
-|---|---|
-| `OnGetAsync(section?)` | Main page load. Sets `ActiveSection` from query string (defaults `"general"`). Loads `ClinicSettings` from DB. For the General section, resolves the local IPv4 address. For the Users section (admin only), loads all users. |
-| `OnGetDicomStatusAsync()` | HTMX polling endpoint. Returns an amber badge ("Restart pending...") if `DicomSettingsPendingRestart == true`, otherwise a green "Active" badge. Polled by the DICOM section every 3 seconds. |
-
-#### POST Handlers
-
-| Handler | Purpose |
-|---|---|
-| `OnPostLanguageAsync()` | Saves language (`"en"` / `"fr"`) to `ClinicSettings.Language`. Sets `HX-Refresh` header to trigger full page reload via HTMX. |
-| `OnPostDicomAsync()` | Saves new AE Title and DICOM port to `ClinicSettings`. Sets `DicomSettingsPendingRestart = true`. Returns an inline amber status message. Port is validated as `int > 0`; AE Title must be non-empty. |
-| `OnPostAddUserAsync()` | Creates a new user (Admin only). Validates: username, display name, and password required; password >= 6 chars; username must be unique. Hashes password with BCrypt. Returns `_UsersTable` partial for HTMX swap. |
-| `OnPostToggleUserAsync(userId)` | Toggles `IsActive` on a user (Admin only). The default `"admin"` account is protected — cannot be deactivated. Returns updated `_UsersTable` partial. |
-| `OnPostDeleteUserAsync(userId)` | Deletes a user (Admin only). The default `"admin"` account is protected — cannot be deleted. Returns updated `_UsersTable` partial. |
-| `OnPostChangePasswordAsync(userId)` | Changes a user's password (Admin only). Validates min 6 chars. Directly sets `PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword)` on the entity. Returns inline success/failure message. |
-
-#### Private Helper
-
-| Method | Purpose |
-|---|---|
-| `GetLocalIpAddress()` | Resolves the machine's hostname via `Dns.GetHostEntry()`, iterates addresses looking for the first IPv4 (`AddressFamily.InterNetwork`). Falls back to `"127.0.0.1"` on failure. |
+The Settings page (`/settings`) is a tabbed HTMX-driven interface with a left sidebar and right content area. It uses a single `SettingsModel` PageModel (`Settings.cshtml.cs`) with partial views for each section. All text is localized via `ILocalizationService` (`@Loc["..."]` tag helper) with English (`en.json`) and French (`fr.json`) translation files.
 
 ### Settings Page Sections
 
-The page uses `?section=` query parameters and a left sidebar nav to switch between three partial views:
-
 #### 1. General (`_SettingsGeneral.cshtml`)
-- **Language selector** — A `<select>` form that POSTs to `?handler=Language`. Choices: English (US), Francais.
-- **Machines (DICOM Modalities) info card** — Read-only display of the local IP, AE Title, and DICOM port. This is informational for configuring CT/MRI machines to push to FocusMed.
+- **Language selector** — English / French.
+- **Machines (DICOM Modalities) info card** — Read-only display of the local IP, AE Title, and DICOM port.
 
 #### 2. DICOM (`_SettingsDicom.cshtml`)
-- **Server Status** — HTMX-polled live indicator (`hx-get="/settings?handler=DicomStatus" hx-trigger="every 3s"`). Shows Active (green) or Restart pending (amber with pulse animation).
-- **AE Title** — Text input, current value from `Settings.AETitle`.
-- **DICOM Port** — Number input (1–65535), current value from `Settings.DicomPort`.
-- **Amber warning** — "Changing AE Title or port requires a server restart. The server will restart automatically when idle (no studies being received)."
-- **Apply & Restart button** — Submits form via HTMX; result shown in `#dicom-result`.
+- **Server Status** — HTMX-polled live indicator (Active / Restart pending).
+- **AE Title** and **DICOM Port** inputs.
+- **Apply & Restart button** — Saves settings, triggers auto-restart when idle.
 
-#### 3. User Management — Admin Only (`_SettingsUsers.cshtml`)
-- **Add User form** — POSTs to `?handler=AddUser`. Fields: Username, Display Name, Password (min 6), Role (User/Admin dropdown). HTMX swaps `#users-table`.
-- **Users Table** (`_UsersTable.cshtml`) — Renders a table with columns:
-  - **Username** — plain text
-  - **Display Name** — plain text
-  - **Role** — Blue badge for Admin, grey badge for User
-  - **Status** — Green dot + "Active" or grey dot + "Inactive"
-  - **Actions**:
-    - Default `"admin"` account: Shows a shield icon with "Default Admin" label — no actions available.
-    - Other users: Toggle Active/Inactive button (POST to `?handler=ToggleUser`) and Delete button (POST to `?handler=DeleteUser` with `hx-confirm` confirmation dialog). Both HTMX-swap `#users-table`.
+#### 3. Printing (`_SettingsPrinting.cshtml`)
+- **Target Printer** — Single dropdown listing all Windows printer queues. Saves the selected printer name to `PrinterA4`, `PrinterA3`, and `PrinterBooklet` fields (all three point to the same physical printer). Paper size, tray, and finishing are controlled by the printer queue's own defaults in Windows — the application does not set any driver-level options.
+
+#### 4. User Management — Admin Only (`_SettingsUsers.cshtml`)
+- **Add User form** — Username, Display Name, Password (min 6), Role.
+- **Users Table** — Toggle Active/Inactive, Delete, Change Password.
 
 ### DICOM Auto-Restart Flow
 
-When an admin changes AE Title or port in the Dashboard:
+When an admin changes AE Title or port:
 
-1. `OnPostDicomAsync()` saves settings to DB with `DicomSettingsPendingRestart = true`
-2. `DicomRestartService` (background service) polls every 5 seconds
-3. Checks if any studies have `Status == StudyStatus.Receiving` — if yes, waits (does not restart during active data flow)
-4. When safe (no receiving studies), calls `IDicomServer.StopAsync()` then `StartAsync(newAeTitle, newPort)`
-5. Sets `DicomSettingsPendingRestart = false` and saves to DB
-6. Dashboard UI polls `OnGetDicomStatusAsync()` every 3 seconds to show the user whether restart is pending or complete
+1. `OnPostDicomAsync()` saves with `DicomSettingsPendingRestart = true`
+2. `DicomRestartService` polls every 5s, waits for no receiving studies
+3. Restarts DICOM server with new settings, clears flag
+4. Dashboard polls status every 3s to show the user
 
+---
+
+## Printing & Formats
+
+### How Printing Works
+
+1. User opens Preview page for a study
+2. User arranges images (drag to reorder, toggle inclusion, set images per page / columns / gap)
+3. User picks a print format from the dropdown: **A4**, **A3**, or **Booklet**
+4. User clicks **Imprimer** (silent print) or **Télécharger** (download PDF)
+5. Server generates the PDF with the same grid layout shown in the preview, then applies the format transform
+
+### Print Formats
+
+| Format | Description |
+|--------|-------------|
+| **A4** | Standard A4 portrait. Images arranged in a grid (configurable images per page, columns, gap). |
+| **A3** | A3 portrait. Each A4 grid page is scaled to fill an A3 portrait page. |
+| **Booklet** | A3 landscape, saddle-stitch imposition. A4 grid pages are paired side-by-side on A3 landscape sheets (front/back). Print, fold, staple. |
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/print/silent/{studyId}?printFormat=N` | POST | Generate PDF + send to printer silently |
+| `/api/print/download/{studyId}?printFormat=N` | POST | Generate PDF + return as file download |
+| `/api/print/silent-existing/{studyId}?printFormat=N&file=X` | POST | Print an already-generated PDF file |
+
+All endpoints accept a `PrintJobRequest` body with image ordering and layout parameters:
+
+```json
+{
+  "OrderedImagePaths": ["/dicom-images/patient/study/IMG_1.png", "..."],
+  "ImagesPerPage": 8,
+  "ColumnsPerRow": 2,
+  "GapPx": 2
+}
 ```
-Admin saves DICOM settings in Dashboard
-  → OnPostDicomAsync() sets DicomSettingsPendingRestart = true
-  → DicomRestartService polls every 5s, detects flag
-  → Waits for no active receiving studies
-  → Restarts IDicomServer with new AE Title + port
-  → Clears DicomSettingsPendingRestart flag
-  → Dashboard UI polls OnGetDicomStatusAsync() every 3s to show status
-```
 
-### ClinicSettings Data Model
+### Printer Configuration
 
-The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded on first access):
-
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `Id` | `int` | auto | Primary key |
-| `ClinicName` | `string` | `"FocusMed Clinic"` | Displayed on cover pages and reports |
-| `AETitle` | `string` | `"FOCUSMED"` | DICOM Application Entity Title |
-| `DicomPort` | `int` | `104` | TCP port for C-STORE connections |
-| `ArchivePath` | `string` | `"archive"` | Root path for raw `.dcm` storage |
-| `DatabasePath` | `string` | `"db/focusmed.db"` | Path to SQLite database |
-| `ArchiveIntervalMonths` | `int` | `3` | Archive interval in months |
-| `WatchFolderPath` | `string` | `@"C:\FocusMed\WatchFolder"` | Folder monitored for `.docx` files |
-| `Language` | `string` | `"en"` | UI language (`"en"` or `"fr"`) |
-| `ResumeText` | `string` | `""` | Medical text shown between cover page and images |
-| `PrinterRegistered` | `bool` | `false` | Whether the virtual printer has been registered |
-| `DicomSettingsPendingRestart` | `bool` | `false` | Flag for DICOM auto-restart flow |
-| `UpdatedAt` | `DateTime` | `UtcNow` | Timestamp of last update |
-
-### User Data Model
-
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `Id` | `int` | auto | Primary key |
-| `Username` | `string` | `""` | Unique index enforced |
-| `DisplayName` | `string` | `""` | Friendly name |
-| `PasswordHash` | `string` | `""` | BCrypt-hashed password |
-| `Role` | `UserRole` | `UserRole.User` | Enum: `Admin = 0`, `User = 1` |
-| `IsActive` | `bool` | `true` | Whether the account can log in |
-| `CreatedAt` | `DateTime` | `UtcNow` | Account creation timestamp |
-
-### How Background Services Consume Settings
-
-| Service | Setting Used | How |
-|---|---|---|
-| `DicomListenerService` | `AETitle`, `DicomPort` | On startup: reads `appsettings.json` first, then overrides with DB values if available. Calls `IDicomServer.StartAsync(aeTitle, port)`. |
-| `DicomRestartService` | `DicomSettingsPendingRestart`, `AETitle`, `DicomPort` | Polls DB every 5s. When flag is true and no studies are receiving, stops and restarts the DICOM server with new settings. Clears the flag. |
-| `VirtualPrinterService` | `WatchFolderPath` | Reads at startup to configure `FileSystemWatcher` for `VirtualPrint.pdf`. |
-
-### Settings Files Reference
-
-| File | Path |
-|---|---|
-| PageModel (code-behind) | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml.cs` |
-| Razor view | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Settings.cshtml` |
-| General partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsGeneral.cshtml` |
-| DICOM partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsDicom.cshtml` |
-| Users partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_SettingsUsers.cshtml` |
-| Users table partial | `src/FocusMed.Dashboard/Areas/Dashboard/Pages/Shared/_UsersTable.cshtml` |
-| ClinicSettings model | `src/FocusMed.Data/Models/ClinicSettings.cs` |
-| IClinicSettingsRepository | `src/FocusMed.Data/Services/IClinicSettingsRepository.cs` |
-| ClinicSettingsRepository | `src/FocusMed.Data/Services/ClinicSettingsRepository.cs` |
-| User model | `src/FocusMed.Data/Models/User.cs` |
-| UserRole enum | `src/FocusMed.Data/Models/UserRole.cs` |
-| IUserRepository | `src/FocusMed.Data/Services/IUserRepository.cs` |
-| UserRepository | `src/FocusMed.Data/Services/UserRepository.cs` |
-| DicomListenerService | `src/FocusMed.Worker/Services/DicomListenerService.cs` |
-| DicomRestartService | `src/FocusMed.Worker/Services/DicomRestartService.cs` |
-| English translations | `src/FocusMed.Dashboard/Resources/en.json` |
-| French translations | `src/FocusMed.Dashboard/Resources/fr.json` |
+- **Settings → Printing**: One dropdown to select the Windows printer queue.
+- The selected printer name is stored in `PrinterA4`, `PrinterA3`, and `PrinterBooklet` (all identical — one physical printer).
+- No driver-level paper size, tray, or finishing code exists in the application. All formatting is handled by the Windows printer queue defaults.
+- If no printer is selected, print/download endpoints return a 400 error.
 
 ---
 
@@ -438,7 +367,7 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 | fo-dicom                                     | 5.1.2                    | DICOM C-STORE SCP network server            |
 | FreeSpire.Doc                                | 14.4.0                   | Headless `.docx → PDF` (No Word required)   |
 | QuestPDF                                     | 2024.10.2                | Fluent A4 PDF cover + dashboard PDF gen     |
-| PdfSharpCore                                 | 1.3.67                   | PDF merging (append pages + draw images)    |
+| PdfSharpCore                                 | 1.3.67                   | PDF merging (grid layout + A3/booklet imposition) |
 | PdfiumViewer                                 | 2.13.0                   | Silent PDF printing via Windows spooler     |
 | EF Core SQLite                               | 8.0.0                    | Database engine (WAL mode)                  |
 | BCrypt.Net-Next                              | 4.0.3                    | Password hashing (bcrypt)                   |
@@ -450,14 +379,13 @@ The `ClinicSettings` entity is a **singleton row** in the database (auto-seeded 
 
 ```
 ./data/
-├── WatchFolder/          ← Drop .docx files here (also VirtualPrint.pdf lands here)
+├── WatchFolder/          ← Drop .docx files here
 ├── Documents/            ← Converted PDFs (.docx → .pdf output)
 ├── Output/               ← Final merged PDFs (Cover + Report + Images)
 ├── db/
 │   └── focusmed.db       ← SQLite database (WAL mode)
 ├── archive/              ← Raw .dcm files organized by Patient/Study/Series
-├── images/               ← Converted PNG files (mirror of archive structure)
-└── inbox/                ← PDFs captured from the Virtual Printer
+└── images/               ← Converted PNG files (mirror of archive structure)
 ```
 
 ---
@@ -468,10 +396,11 @@ Settings live in `src/FocusMed.Worker/appsettings.json` (also overridden by the 
 
 | Key                         | Default                   | Description                                            |
 | --------------------------- | ------------------------- | ------------------------------------------------------ |
-| `DicomPort`                 | `104`                     | TCP port the DICOM C-STORE SCP listens on              |
+| `DicomPort`                 | `1004`                     | TCP port the DICOM C-STORE SCP listens on              |
 | `AETitle`                   | `FOCUSMED`                | DICOM Application Entity Title                         |
 | `DatabasePath`              | `data/db/focusmed.db`     | Path to SQLite database file                           |
 | `ArchivePath`               | `data/archive`            | Root path for raw `.dcm` file storage                  |
+| `ImagesPath`                | `data/images`             | Root path for converted `.png` files                   |
 | `WatchFolderPath`           | `data/WatchFolder`        | Folder monitored for incoming `.docx` files            |
 | `StudyStabilizationSeconds` | `30`                      | Config-only: seconds before a study is marked Complete |
 
@@ -499,13 +428,11 @@ PRAGMA foreign_keys = ON;
 | `Series` | DICOM series within studies |
 | `Images` | Individual DICOM images with file paths |
 | `Documents` | Converted `.docx` reports linked to studies |
-| `InboxDocuments` | Virtual Printer PDFs awaiting assignment |
 | `ClinicSettings` | Singleton config row (auto-seeded) |
 | `Users` | Auth users with BCrypt-hashed passwords |
 
 ### Performance Indexes
 
-To ensure the system scales efficiently under large DICOM workloads, database indexes are defined on critical search, filter, and sorting columns:
 - **`Patient`**: `PatientId` (index), `Name` (index)
 - **`Study`**: `StudyInstanceUid` (unique index), `StudyDate` (index), `Modality` (index), `Status` (index), `IsDeleted` (index), `AccessionNumber` (index), `CreatedAt` (index), `DeletedAt` (index)
 - **`Series`**: `SeriesInstanceUid` (unique index)
@@ -529,10 +456,10 @@ dotnet ef database update --project src\FocusMed.Data --startup-project src\Focu
 
 ```bash
 # Restore all NuGet packages
-dotnet restore D:\FocusMed\FocusMed.slnx
+dotnet restore D:\ClariMed\FocusMed.slnx
 
 # Build the entire solution
-dotnet build D:\FocusMed\FocusMed.slnx
+dotnet build D:\ClariMed\FocusMed.slnx
 
 # Run in console mode (keeps running until Ctrl+C)
 dotnet run --project src\FocusMed.Worker
@@ -541,14 +468,16 @@ dotnet run --project src\FocusMed.Worker
 dotnet watch run --project src\FocusMed.Worker
 ```
 
-> **Important:** Use `D:\FocusMed\FocusMed.slnx` (not `.sln`). Tools that expect `.sln` will fail.
+> **Important:** Use `D:\ClariMed\FocusMed.slnx` (not `.sln`). Tools that expect `.sln` will fail.
 
 ### First Run
 
 1. The app seeds a default `admin` / `admin` user
-2. Open `http://localhost:5000` — redirects to login
-3. Sign in with `admin` / `admin`
-4. Navigate to Settings → DICOM to configure your modality connection
+2. Worker auto-starts the Notifier tray app
+3. Open `http://localhost:5000` — redirects to login
+4. Sign in with `admin` / `admin`
+5. Navigate to Settings → DICOM to configure your modality connection
+6. Navigate to Settings → Printing to select your printer
 
 ---
 
@@ -557,12 +486,13 @@ dotnet watch run --project src\FocusMed.Worker
 1. **File Locks during `dotnet watch`** — `<UseAppHost>false</UseAppHost>` prevents DLL lock errors on `pdfium.dll` during live development.
 2. **Stable Directory Hashing (FNV-1a)** — Deterministic folder names survive database/process restarts.
 3. **Hyper-Fast PDF Generation** — Server-side image resizing + JPEG compression at 75% quality. PDFs compile in < 2 seconds.
-4. **Zero Thumbnail 404 Errors** — Preview sidebar loads optimized PNGs directly.
-5. **Assignment Workflow** — Linking a Virtual Printer PDF redirects directly to the study preview.
-6. **Unified Search & Filtering** — Filter bars in Patients and Recycle Bin offer a single, powerful search field for Patient Name, Patient ID, and Accession Number, coupled with start and end date ranges.
-7. **Filter State Preservation** — Filters are stored in `sessionStorage` and restored automatically when navigating back to the page. HTMX updates the lists dynamically via triggered events upon restoration.
-568. **Scrollable Filters** — Filter bars scroll natively with the page content for a cleaner, non-intrusive viewing experience.
-569. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props` to avoid warnings and build-blockages during active `dotnet watch` live development sessions.
-570. **Crash Safety** — Global `UnhandledException` and `UnobservedTaskException` handlers in `Program.cs` cleanly exit the service on fatal errors instead of looping. Service loops execute within safe `try/catch` blocks.
-571. **Manual Stop Page** — A dedicated `/system-stop` page accessible via the sidebar to gracefully stop the background services and the Kestrel host via `IHostApplicationLifetime`.
-572. **GitHub Auto-Update & Notifier Tray App** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` (a standalone WinForms tray app) alerts the user to updates, and instantly pops up when a printed report arrives. To prevent state desync, the `FocusMed.Worker` explicitly terminates and restarts the tray app during any backend restarts.
+4. **Grid-Layout PDF Output** — Images are laid out in a configurable grid (images per page, columns, gap) matching the Preview page layout exactly.
+5. **Three Print Formats** — A4 standard, A3 portrait (scaled), and A3 booklet (saddle-stitch imposition) all generated from the same image grid.
+6. **Assignment Workflow** — The Notifier tray app detects unassigned converted documents and pops up a quick-assign window to link them to a study.
+7. **Unified Search & Filtering** — Filter bars in Patients and Recycle Bin offer a single search field for Patient Name, Patient ID, and Accession Number, with date range filters.
+8. **Filter State Preservation** — Filters are stored in `sessionStorage` and restored automatically when navigating back.
+9. **Vulnerability Suppression** — NuGet audit advisories (such as `SixLabors.ImageSharp` and `SQLitePCLRaw.lib.e_sqlite3`) are explicitly suppressed in `Directory.Build.props`.
+10. **Crash Safety** — Global `UnhandledException` and `UnobservedTaskException` handlers cleanly exit the service on fatal errors.
+11. **Manual Stop Page** — A dedicated `/system-stop` endpoint to gracefully stop all background services and the Kestrel host.
+12. **GitHub Auto-Update** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` alerts the user and offers one-click update.
+13. **Notifier Auto-Start** — Worker launches the Notifier tray app on startup if it's not already running.

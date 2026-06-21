@@ -32,7 +32,7 @@ public class DicomListenerService : BackgroundService
         var configSection = _configuration.GetSection("FocusMed");
         var aeTitle = configSection.GetValue<string>("AETitle") ?? "FOCUSMED";
         var port = configSection.GetValue<int>("DicomPort");
-        if (port == 0) port = 104;
+        if (port == 0) port = 1004;
 
         // Try loading from database
         try

@@ -1,7 +1,6 @@
 using System.Text;
 using FocusMed.Data;
 using FocusMed.Data.Models;
-using FocusMed.Imaging.Converters;
 using FellowOakDicom;
 using FellowOakDicom.Imaging;
 using Microsoft.EntityFrameworkCore;

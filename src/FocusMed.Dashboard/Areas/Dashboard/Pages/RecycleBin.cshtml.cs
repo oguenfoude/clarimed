@@ -152,6 +152,10 @@ public class RecycleBinModel : PageModel
             {
                 try { System.IO.File.Delete(doc.PdfFilePath); } catch { /* ignore */ }
             }
+            if (!string.IsNullOrEmpty(doc.OriginalFilePath) && System.IO.File.Exists(doc.OriginalFilePath))
+            {
+                try { System.IO.File.Delete(doc.OriginalFilePath); } catch { /* ignore */ }
+            }
         }
 
         // Let EF cascade delete the DB rows (Images, Series, Documents, etc.)

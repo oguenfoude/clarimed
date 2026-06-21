@@ -3,6 +3,7 @@ using System;
 using FocusMed.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FocusMed.Data.Migrations
 {
     [DbContext(typeof(FocusMedDbContext))]
-    partial class FocusMedDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260621172430_AddTargetPrinterName")]
+    partial class AddTargetPrinterName
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
@@ -53,18 +56,6 @@ namespace FocusMed.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LatestVersion")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PrinterA3")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PrinterA4")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PrinterBooklet")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

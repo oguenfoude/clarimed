@@ -35,20 +35,4 @@ public class SpireDocumentConverter : IDocumentConverter
             return pdfPath;
         }, cancellationToken);
     }
-
-    public async Task<string> ConvertDocxToPdfAsync(
-        Stream docxStream, string outputFileName, string outputDir, CancellationToken cancellationToken)
-    {
-        return await Task.Run(() =>
-        {
-            using var document = new Document();
-            // FreeSpire.Doc expects format type on load from stream. Since the files from watch folder are .docx:
-            document.LoadFromStream(docxStream, FileFormat.Docx);
-            Directory.CreateDirectory(outputDir);
-            var pdfPath = Path.Combine(outputDir, outputFileName + ".pdf");
-            document.SaveToFile(pdfPath, FileFormat.PDF);
-            _logger.LogInformation("Converted document from stream to PDF: {Path}", pdfPath);
-            return pdfPath;
-        }, cancellationToken);
-    }
 }

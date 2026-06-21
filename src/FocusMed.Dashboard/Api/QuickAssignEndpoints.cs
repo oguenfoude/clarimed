@@ -101,6 +101,16 @@ public static class QuickAssignEndpoints
             var doc = await db.Documents.FirstOrDefaultAsync(d => d.Id == id);
             if (doc == null) return Results.NotFound("Document not found.");
 
+            // Delete physical files to prevent orphaned files
+            if (!string.IsNullOrEmpty(doc.OriginalFilePath) && System.IO.File.Exists(doc.OriginalFilePath))
+            {
+                try { System.IO.File.Delete(doc.OriginalFilePath); } catch { }
+            }
+            if (!string.IsNullOrEmpty(doc.PdfFilePath) && System.IO.File.Exists(doc.PdfFilePath))
+            {
+                try { System.IO.File.Delete(doc.PdfFilePath); } catch { }
+            }
+
             db.Documents.Remove(doc);
             await db.SaveChangesAsync();
 

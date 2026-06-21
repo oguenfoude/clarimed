@@ -41,7 +41,7 @@
         <button @@click="sidebarOpen = !sidebarOpen" class="px-4 py-6 border-b border-slate-800 flex justify-center h-20 items-center w-full hover:bg-white/5 transition-colors focus:outline-none group">
             <div class="flex items-center gap-3 overflow-hidden whitespace-nowrap w-full @(isSidebarOpen ? "px-2" : "justify-center")" :class="sidebarOpen ? 'px-2' : 'justify-center'">
                 <div class="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg shadow-blue-500/25 ring-1 ring-white/10 group-hover:scale-105 transition-transform overflow-hidden bg-white">
-                    <img src="/logo.png" alt="FocusMed Logo" class="w-full h-full object-cover" />
+                    <img src="/logo.png" alt="FocusMed Logo" class="w-full h-full object-contain p-1" />
                 </div>
                 <div x-show="sidebarOpen" style="@(isSidebarOpen ? "" : "display:none;")" x-transition.opacity.duration.300ms class="flex-1 text-left">
                     <h1 class="text-xl font-bold tracking-tight text-white">FocusMed</h1>
@@ -90,7 +90,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6v4H9z" />
                         </svg>
-                        <span x-show="sidebarOpen" style="@(isSidebarOpen ? "" : "display:none;")" x-transition.opacity.duration.300ms class="whitespace-nowrap">Stop System</span>
+                        <span x-show="sidebarOpen" style="@(isSidebarOpen ? "" : "display:none;")" x-transition.opacity.duration.300ms class="whitespace-nowrap">@Loc["Sidebar_StopSystem"]</span>
                     </a>
                 </div>
             </div>
@@ -108,6 +108,16 @@
         <header class="h-16 bg-white/70 backdrop-blur-lg border-b border-slate-200/60 flex items-center justify-between px-6 shrink-0 z-30 sticky top-0">
             <div class="flex items-center gap-4">
                 <h2 class="text-xl font-black text-slate-800 tracking-tight">@ViewData["Title"]</h2>
+                
+                <!-- Reload Page Button -->
+                <div class="hidden md:flex ml-6">
+                    <button onclick="window.location.reload();" class="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 hover:text-blue-600 transition-all font-semibold text-sm shadow-sm group">
+                        <svg class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
             </div>
             
             <div class="flex items-center gap-6">
@@ -117,7 +127,7 @@
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                     </div>
-                    <span class="text-xs font-bold text-slate-500 hidden sm:block">DICOM Server Active</span>
+                    <span class="text-xs font-bold text-slate-500 hidden sm:block">@Loc["Dashboard_DicomActive"]</span>
                 </div>
                 
                 <!-- Time -->

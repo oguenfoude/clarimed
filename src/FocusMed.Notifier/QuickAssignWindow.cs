@@ -15,12 +15,12 @@ public class QuickAssignWindow : Form
     private readonly HttpClient _http;
     private readonly int _inboxDocumentId;
 
-    private TextBox _searchBox;
-    private DataGridView _grid;
+    private TextBox _searchBox = null!;
+    private DataGridView _grid = null!;
 
-    private System.Windows.Forms.Timer _debounceTimer;
-    private Label _lblStatus;
-    private ProgressBar _progressBar;
+    private System.Windows.Forms.Timer _debounceTimer = null!;
+    private Label _lblStatus = null!;
+    private ProgressBar _progressBar = null!;
 
     public QuickAssignWindow(int inboxDocumentId)
     {
@@ -133,7 +133,7 @@ public class QuickAssignWindow : Form
         {
             if (e.RowIndex >= 0)
             {
-                var studyId = (int)_grid.Rows[e.RowIndex].Cells["StudyId"].Value;
+                var studyId = (int)(_grid.Rows[e.RowIndex].Cells["StudyId"].Value ?? 0);
                 await AssignToStudy(studyId);
             }
         };
@@ -171,7 +171,7 @@ public class QuickAssignWindow : Form
             _grid.DataSource = null;
             _grid.Columns.Clear();
             _grid.Columns.Add("StudyId", "StudyId");
-            _grid.Columns["StudyId"].Visible = false;
+            _grid.Columns["StudyId"]!.Visible = false;
             _grid.Columns.Add("PatientName", "Name");
             _grid.Columns.Add("PatientCode", "ID");
             _grid.Columns.Add("Modality", "Modality");
@@ -187,7 +187,7 @@ public class QuickAssignWindow : Form
                     var mod = r.GetProperty("modality").GetString();
                     var sDate = r.TryGetProperty("studyDate", out var dProp) && dProp.ValueKind != JsonValueKind.Null ? dProp.GetDateTime().ToShortDateString() : "";
 
-                    _grid.Rows.Add(studyId, pName, pCode, mod, sDate);
+                    _grid.Rows.Add(studyId, pName ?? "", pCode ?? "", mod ?? "", sDate ?? "");
                 }
             }
             SetLoading(false, $"Found {results?.Length ?? 0} studies");
@@ -195,7 +195,9 @@ public class QuickAssignWindow : Form
         catch (Exception ex)
         {
             SetLoading(false, "Error searching studies");
-            System.IO.File.AppendAllText(@"D:\ClariMed\notifier_error.log", $"PerformSearch Error: {ex}\n");
+            var logDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FocusMed", "logs");
+            System.IO.Directory.CreateDirectory(logDir);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "notifier_error.log"), $"PerformSearch Error: {ex}\n");
         }
     }
 

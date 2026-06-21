@@ -79,7 +79,9 @@ public class NotifierApplicationContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            System.IO.File.AppendAllText(@"D:\ClariMed\notifier_error.log", $"Poll Error: {ex}\n");
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FocusMed", "logs");
+            System.IO.Directory.CreateDirectory(logDir);
+            System.IO.File.AppendAllText(Path.Combine(logDir, "notifier_error.log"), $"Poll Error: {ex}\n");
         }
     }
 

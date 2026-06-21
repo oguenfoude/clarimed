@@ -17,9 +17,6 @@ public class DashboardModel : PageModel
     private readonly IServiceScopeFactory _scopeFactory;
 
     public int TotalPatients { get; set; }
-    public int TotalStudies { get; set; }
-    public int TotalImages { get; set; }
-    public int TotalPending { get; set; }
     public List<ModalityCount> ModalityBreakdown { get; set; } = new();
 
     public DashboardModel(IServiceScopeFactory scopeFactory)
@@ -34,17 +31,12 @@ public class DashboardModel : PageModel
         await LoadDataAsync(db);
     }
 
-
     private async Task LoadDataAsync(FocusMedDbContext db)
     {
         TotalPatients = await db.Patients.CountAsync();
-        TotalStudies = await db.Studies.CountAsync();
-        TotalImages = await db.Studies.SumAsync(s => s.ImageCount);
-        TotalPending = 0;
 
         var startOfToday = DateTime.Today;
 
-        // Modality Distribution (Today only)
         ModalityBreakdown = await db.Studies
             .Where(s => s.CreatedAt >= startOfToday)
             .GroupBy(s => s.Modality)
@@ -55,6 +47,5 @@ public class DashboardModel : PageModel
             })
             .OrderByDescending(m => m.Count)
             .ToListAsync();
-
     }
 }

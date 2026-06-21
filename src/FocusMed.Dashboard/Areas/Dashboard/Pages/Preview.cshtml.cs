@@ -87,6 +87,7 @@ public class PreviewModel : PageModel
         public int ColumnsPerRow { get; set; }
         public int ImagesPerPage { get; set; }
         public int GapPx { get; set; }
+        public PrintFormat Format { get; set; } = PrintFormat.A4;
     }
 
     public async Task<IActionResult> OnPostGeneratePdfAsync([FromBody] GeneratePdfRequest request)
@@ -184,7 +185,7 @@ public class PreviewModel : PageModel
         string finalOutputDir = Path.GetFullPath(_config["FocusMed:MergedPdfOutputPath"] ?? Path.Combine("data", "output"));
         Directory.CreateDirectory(finalOutputDir);
         string finalOutputPath = Path.Combine(finalOutputDir, $"Merged_{study.AccessionNumber}_{Guid.NewGuid()}.pdf");
-        await _pdfMerger.MergeAsync(coverPdfPath, actualReportPdfPath, new[] { reportPdfPath }, Array.Empty<string>(), finalOutputPath, CancellationToken.None);
+        await _pdfMerger.MergeAsync(coverPdfPath, actualReportPdfPath, new[] { reportPdfPath }, Array.Empty<string>(), finalOutputPath, request.Format, request.ImagesPerPage, request.ColumnsPerRow, request.GapPx, CancellationToken.None);
 
         // Cleanup
         try { System.IO.File.Delete(coverPdfPath); } catch { }

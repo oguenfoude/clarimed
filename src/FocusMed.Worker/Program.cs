@@ -68,19 +68,40 @@ builder.Services.AddWindowsService(options =>
     options.ServiceName = "FocusMed";
 });
 
+// ── Safe Data Path Resolver ──
+string GetSafeDataPath(string? configuredPath, string defaultRelative)
+{
+    var path = configuredPath ?? defaultRelative;
+    if (!Path.IsPathRooted(path))
+    {
+        var commonAppData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FocusMed");
+        path = Path.Combine(commonAppData, path);
+    }
+    return Path.GetFullPath(path);
+}
+
 // ── Read configuration ──
 var config = builder.Configuration.GetSection("FocusMed");
-var databasePath = Path.GetFullPath(config.GetValue<string>("DatabasePath") ?? "data/db/focusmed.db");
-var watchFolderPath = Path.GetFullPath(config.GetValue<string>("WatchFolderPath") ?? "data/WatchFolder");
-var documentOutputPath = Path.GetFullPath(config.GetValue<string>("DocumentOutputPath") ?? "data/Documents");
-var archivePath = Path.GetFullPath(config.GetValue<string>("ArchivePath") ?? "data/archive");
+var databasePath = GetSafeDataPath(config.GetValue<string>("DatabasePath"), "data/db/focusmed.db");
+var watchFolderPath = GetSafeDataPath(config.GetValue<string>("WatchFolderPath"), "data/WatchFolder");
+var documentOutputPath = GetSafeDataPath(config.GetValue<string>("DocumentOutputPath"), "data/Documents");
+var archivePath = GetSafeDataPath(config.GetValue<string>("ArchivePath"), "data/archive");
+var imagesPath = GetSafeDataPath(config.GetValue<string>("ImagesPath"), "data/images");
+
+// Write absolute paths back to config so DI services see them natively
+config["DatabasePath"] = databasePath;
+config["WatchFolderPath"] = watchFolderPath;
+config["DocumentOutputPath"] = documentOutputPath;
+config["ArchivePath"] = archivePath;
+config["ImagesPath"] = imagesPath;
 
 // ── Ensure essential directories exist ──
-var dataDir = Path.GetDirectoryName(Path.GetFullPath(databasePath));
+var dataDir = Path.GetDirectoryName(databasePath);
 if (!string.IsNullOrEmpty(dataDir)) Directory.CreateDirectory(dataDir);
 Directory.CreateDirectory(watchFolderPath);
 Directory.CreateDirectory(documentOutputPath);
 Directory.CreateDirectory(archivePath);
+Directory.CreateDirectory(imagesPath);
 
 // ── Register Application Layers ──
 builder.Services.AddFocusMedData(databasePath);
@@ -132,51 +153,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
     db.Database.Migrate();
 
-    // Ensure the Virtual Printer is registered using the correct Local Port
-    var watchFolderPathStr = Path.GetFullPath(watchFolderPath);
-    var printerPortPath = Path.Combine(watchFolderPathStr, "incoming_print.pdf");
-    
-    _ = Task.Run(() =>
-    {
-        try
-        {
-            var checkCmd = $"$p = Get-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; if ($p -and $p.PortName -eq '{printerPortPath}') {{ exit 0 }} else {{ exit 1 }}";
-            var psiCheck = new ProcessStartInfo("powershell", $"-NoProfile -Command \"{checkCmd}\"")
-            {
-                CreateNoWindow = true, UseShellExecute = false
-            };
-            var checkProc = Process.Start(psiCheck);
-            checkProc?.WaitForExit();
-            
-            if (checkProc?.ExitCode != 0)
-            {
-                Console.WriteLine("[INFO] FocusMed printer not found or port mismatched. Recreating...");
-                var psCmd = $"Remove-Printer -Name 'FocusMed' -ErrorAction SilentlyContinue; " +
-                            $"Add-PrinterPort -Name '{printerPortPath}' -ErrorAction SilentlyContinue; " +
-                            $"Add-Printer -Name 'FocusMed' -DriverName 'Microsoft Print To PDF' -PortName '{printerPortPath}'";
-                
-                var psiAdd = new ProcessStartInfo("powershell", $"-NoProfile -Command \"{psCmd}\"")
-                {
-                    CreateNoWindow = true, UseShellExecute = true, Verb = "runas" // Request admin if needed
-                };
-                var addProc = Process.Start(psiAdd);
-                addProc?.WaitForExit();
-                Console.WriteLine("[INFO] FocusMed printer recreated successfully.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[WARNING] Could not auto-create virtual printer: {ex.Message}");
-        }
-    });
-
-    var settings = db.ClinicSettings.OrderBy(s => s.Id).FirstOrDefault();
-    if (settings != null)
-    {
-        settings.PrinterRegistered = true;
-        db.SaveChanges();
-    }
-
     // Seed default admin user if no users exist
     var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
     if (await userRepo.GetCountAsync() == 0)
@@ -198,8 +174,6 @@ FellowOakDicom.DicomSetupBuilder.UseServiceProvider(app.Services);
 app.UseStaticFiles();
 
 // Serve DICOM images
-var imagesPath = Path.GetFullPath(config.GetValue<string>("ImagesPath") ?? "data/images");
-Directory.CreateDirectory(imagesPath);
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(imagesPath),
@@ -245,69 +219,52 @@ app.MapGet("/", async context =>
     await Task.CompletedTask;
 });
 
-// Virtual Printer routes are no longer needed since we are using a local file port.
+// System shutdown endpoint
+app.MapGet("/system-stop", (IHostApplicationLifetime lifetime) =>
+{
+    // Run shutdown asynchronously so the HTTP response can be sent first
+    Task.Run(async () => 
+    {
+        await Task.Delay(500);
+        
+        // Also kill the tray app UI so the ENTIRE suite completely stops
+        foreach (var processName in new[] { "FocusMed", "FocusMed.Notifier" })
+        {
+            var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+            foreach (var p in processes)
+            {
+                try { p.Kill(); } catch { }
+            }
+        }
+
+        lifetime.StopApplication();
+    });
+    return Results.Ok(new { status = "success", message = "Entire system (Backend & UI) is shutting down..." });
+});
 
 app.MapQuickAssignEndpoints();
+app.MapPrintEndpoints();
+app.MapDocumentEndpoints();
 app.MapRazorPages();
 
-// ── Auto-open browser & Auto-start Notifier ──
-app.Lifetime.ApplicationStarted.Register(() =>
+// ── Auto-start Notifier tray app if not already running ──
+try
 {
-    try
+    var existing = System.Diagnostics.Process.GetProcessesByName("FocusMed");
+    if (existing.Length == 0)
     {
-        // Only open browser automatically when running interactively (not as a Windows Service)
-        if (!OperatingSystem.IsWindows() || !System.ServiceProcess.ServiceController.GetServices().Any(s => s.ServiceName == "FocusMed" && s.Status == System.ServiceProcess.ServiceControllerStatus.Running))
+        var notifierPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.exe"));
+        if (File.Exists(notifierPath))
         {
-            Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true });
-        }
-
-        // Auto-launch Notifier: try sibling "Notifier" folder (production layout),
-        // then fall back to dev Debug path.
-        var baseDir = AppContext.BaseDirectory;
-        var productionNotifier = Path.GetFullPath(Path.Combine(baseDir, "..", "Notifier", "FocusMed.exe"));
-        var devNotifier = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.exe"));
-
-        var notifierPath = File.Exists(productionNotifier) ? productionNotifier
-                         : File.Exists(devNotifier) ? devNotifier
-                         : null;
-
-        Console.WriteLine($"[INFO] Notifier path: {notifierPath ?? "not found"}");
-
-        if (notifierPath != null)
-        {
-            // Kill any existing instances first
-            foreach (var proc in Process.GetProcessesByName("FocusMed"))
-            {
-                try { proc.Kill(); } catch { }
-            }
-
-            Process.Start(new ProcessStartInfo
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = notifierPath,
-                WorkingDirectory = Path.GetDirectoryName(notifierPath),
-                UseShellExecute = true
+                UseShellExecute = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
             });
-            Console.WriteLine("[INFO] Notifier started.");
         }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[WARNING] Error starting processes: {ex.Message}");
-    }
-});
-
-app.Lifetime.ApplicationStopping.Register(() =>
-{
-    try
-    {
-        var p = Process.GetProcessesByName("FocusMed.Notifier");
-        foreach (var proc in p)
-        {
-            try { proc.Kill(); } catch { }
-        }
-        Console.WriteLine("[DEBUG] Notifier processes killed on shutdown.");
-    }
-    catch { }
-});
+}
+catch { /* Notifier is optional — don't block startup */ }
 
 app.Run();

@@ -1,8 +1,6 @@
 using FocusMed.Printing.Cover;
-using FocusMed.Printing.Engines;
 using FocusMed.Printing.Merging;
-
-using FocusMed.Printing.Templates;
+using FocusMed.Printing.SilentPrint;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FocusMed.Printing;
@@ -10,24 +8,17 @@ namespace FocusMed.Printing;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers all FocusMed.Printing services:
-    /// - Legacy GDI print engine (IPrintTemplate + IPrintEngine)
+    /// Registers FocusMed.Printing services:
     /// - PDF cover page generator (ICoverPageGenerator — QuestPDF)
-    /// - PDF merger (IPdfMerger — PdfSharpCore)
-    /// - Silent PDF printer (ISilentPdfPrinter — PdfiumViewer)
+    /// - PDF merger (IPdfMerger — PdfSharpCore grid layout + A3/booklet imposition)
+    /// - Silent PDF printer (ISilentPrinter — PdfiumViewer)
     /// </summary>
     public static IServiceCollection AddFocusMedPrinting(this IServiceCollection services)
     {
-        // Legacy GDI printing path (kept for backward compatibility)
-        services.AddSingleton<IPrintTemplate, DefaultPrintTemplate>();
-        services.AddSingleton<IPrintEngine, WindowsPrintEngine>();
-
-        // New PDF pipeline
-        services.AddSingleton<ICoverPageGenerator, QuestPdfCoverPageGenerator>();
-        services.AddSingleton<IPdfMerger, PdfSharpMerger>();
-
+        services.AddTransient<ICoverPageGenerator, QuestPdfCoverPageGenerator>();
+        services.AddTransient<IPdfMerger, PdfSharpMerger>();
+        services.AddTransient<ISilentPrinter, PdfiumSilentPrinter>();
 
         return services;
     }
 }
-

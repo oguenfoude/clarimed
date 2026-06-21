@@ -12,22 +12,31 @@ static class Program
         try
         {
             _mutex = new Mutex(true, "FocusMedApp", out bool createdNew);
-            
-            // Open the browser to the dashboard regardless if it's already running or not
-            try { Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true }); } catch { }
 
             if (!createdNew)
             {
                 // App is already running in tray, so just opening the browser is enough.
+                try { Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true }); } catch { }
                 return;
             }
 
             ApplicationConfiguration.Initialize();
+            
+            // Show Splash Screen first
+            using (var splash = new SplashForm())
+            {
+                Application.Run(splash);
+                if (!splash.LaunchSuccess)
+                {
+                    return; // Exit if failed to launch
+                }
+            }
+
             Application.Run(new NotifierApplicationContext());
         }
         catch (Exception ex)
         {
-            System.IO.File.WriteAllText(@"D:\ClariMed\crash.log", ex.ToString());
+            System.IO.File.WriteAllText("crash.log", ex.ToString());
         }
         finally
         {

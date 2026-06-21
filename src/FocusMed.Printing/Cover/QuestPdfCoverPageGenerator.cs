@@ -24,10 +24,22 @@ public class QuestPdfCoverPageGenerator : ICoverPageGenerator
         Microsoft.Extensions.Hosting.IHostEnvironment env)
     {
         _logger = logger;
-        var configured = configuration["FocusMed:CoverPageTemplatePath"] ?? "templates/pagegarde.pdf";
+        var configured = configuration["FocusMed:CoverPageTemplatePath"] ?? "templates/pagegarde.docx";
         if (!Path.IsPathRooted(configured))
         {
-            configured = Path.GetFullPath(Path.Combine(env.ContentRootPath, "..", "..", configured));
+            var current = AppContext.BaseDirectory;
+            string? foundPath = null;
+            while (!string.IsNullOrEmpty(current))
+            {
+                var candidate = Path.Combine(current, configured);
+                if (File.Exists(candidate))
+                {
+                    foundPath = candidate;
+                    break;
+                }
+                current = Path.GetDirectoryName(current);
+            }
+            configured = foundPath ?? Path.GetFullPath(Path.Combine(env.ContentRootPath, configured));
         }
         _templatePath = Path.GetFullPath(configured);
     }

@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using System.IO;
 
 namespace FocusMed.Dashboard.Areas.Dashboard.Pages;
 
@@ -17,18 +16,12 @@ public class PatientsModel : PageModel
     private readonly IServiceScopeFactory _scopeFactory;
 
     public List<StudyRow> Studies { get; set; } = new();
-    public List<string> Modalities { get; set; } = new();
-    public int TotalStudies { get; set; }
-    public int TotalImages { get; set; }
-    public int Receiving { get; set; }
-    public int Complete { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public string? StartDate { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public string? EndDate { get; set; }
-
 
     public PatientsModel(IServiceScopeFactory scopeFactory)
     {
@@ -52,32 +45,16 @@ public class PatientsModel : PageModel
 
     private async Task LoadAsync(FocusMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate, bool isInitialLoad)
     {
-        // Do not force a default date filter on initial load.
-        // This ensures historical DICOM imports are visible immediately.
-
         StartDate = startDate;
         EndDate = endDate;
 
-        // Global stats
-        TotalStudies = await db.Studies.CountAsync();
-        TotalImages = await db.Studies.SumAsync(s => s.ImageCount);
-        Receiving = await db.Studies.CountAsync(s => s.Status == StudyStatus.Receiving);
-        Complete = await db.Studies.CountAsync(s => s.Status == StudyStatus.Complete);
-
-        Modalities = await db.Studies
-            .Select(s => s.Modality)
-            .Distinct()
-            .Where(m => !string.IsNullOrEmpty(m))
-            .ToListAsync();
-
         var query = db.Studies.Include(s => s.Patient).AsQueryable();
 
-        // Filters
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchClean = search.Trim().ToLower();
-            query = query.Where(s => s.Patient.Name.ToLower().Contains(searchClean) || 
-                                     s.Patient.PatientId.ToLower().Contains(searchClean) || 
+            query = query.Where(s => s.Patient.Name.ToLower().Contains(searchClean) ||
+                                     s.Patient.PatientId.ToLower().Contains(searchClean) ||
                                      s.AccessionNumber.ToLower().Contains(searchClean));
         }
 
@@ -106,7 +83,6 @@ public class PatientsModel : PageModel
             query = query.Where(s => s.StudyDate < localEnd);
         }
 
-        // Indexing from new to old (descending order)
         query = query.OrderByDescending(s => s.StudyDate ?? s.CreatedAt);
 
         var rawStudies = await query.Take(500).ToListAsync();

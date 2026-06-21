@@ -8,12 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="FreeSpire.Doc" Version="14.4.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\FocusMed.Data\FocusMed.Data.csproj" />
   </ItemGroup>
 
 </Project>

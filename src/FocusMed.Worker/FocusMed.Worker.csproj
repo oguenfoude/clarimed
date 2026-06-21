@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-FocusMed.Worker-beba8e4e-f106-4c85-88f2-ff630bb97670</UserSecretsId>
     <UseAppHost>true</UseAppHost>
+    <ApplicationIcon>..\logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

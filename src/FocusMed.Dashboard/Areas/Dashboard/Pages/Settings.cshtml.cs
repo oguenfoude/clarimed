@@ -17,6 +17,7 @@ public class SettingsModel : PageModel
     public string ActiveSection { get; set; } = "general";
     public IReadOnlyList<User>? Users { get; set; }
     public List<string> LocalIpAddresses { get; set; } = new();
+    public List<string> InstalledPrinters { get; set; } = new();
     public bool IsAdmin => User.IsInRole("Admin");
 
     public SettingsModel(IServiceScopeFactory scopeFactory)
@@ -73,6 +74,22 @@ public class SettingsModel : PageModel
             }
         }
 
+        // Get installed printers for Silent Printing dropdown
+        if (ActiveSection == "general" || ActiveSection == "printing")
+        {
+            try
+            {
+                foreach (string printer in System.Drawing.Printing.PrinterSettings.InstalledPrinters)
+                {
+                    InstalledPrinters.Add(printer);
+                }
+            }
+            catch (Exception)
+            {
+                // Ignoring printer lookup failures
+            }
+        }
+
         if (ActiveSection == "users" && IsAdmin)
         {
             var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
@@ -91,6 +108,20 @@ public class SettingsModel : PageModel
         await repo.UpdateAsync(settings);
         Response.Headers["HX-Refresh"] = "true";
         return Content("");
+    }
+
+    // ── Printing Settings ──
+    public async Task<IActionResult> OnPostPrintingAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
+        var settings = await repo.GetAsync();
+        var printer = Request.Form["PrinterA4"].FirstOrDefault() ?? "";
+        settings.PrinterA4 = printer;
+        settings.PrinterA3 = printer;
+        settings.PrinterBooklet = printer;
+        await repo.UpdateAsync(settings);
+        return Content("<span class='text-emerald-600 text-sm font-bold'>Printer saved successfully!</span>");
     }
 
     // ── DICOM Settings ──

@@ -16,6 +16,11 @@
             @Loc["Settings_General"]
         </a>
 
+        <a href="/settings?section=printing"
+           class="block px-4 py-2.5 rounded-xl text-sm font-bold transition-colors @(Model.ActiveSection == "printing" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800")">
+            Printing & Devices
+        </a>
+
         <a href="/settings?section=dicom"
            class="block px-4 py-2.5 rounded-xl text-sm font-bold transition-colors @(Model.ActiveSection == "dicom" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800")">
             @Loc["Settings_DicomSettings"]
@@ -39,6 +44,10 @@
         else if (Model.ActiveSection == "dicom")
         {
             @await Html.PartialAsync("_SettingsDicom", Model)
+        }
+        else if (Model.ActiveSection == "printing")
+        {
+            @await Html.PartialAsync("_SettingsPrinting", Model)
         }
         else if (Model.ActiveSection == "users" && Model.IsAdmin)
         {

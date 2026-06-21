@@ -1,0 +1,38 @@
+@model FocusMed.Dashboard.Areas.Dashboard.Pages.SettingsModel
+
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+        <h2 class="text-lg font-bold text-slate-800">@Loc["Settings_Printing"]</h2>
+        <p class="text-sm text-slate-500 mt-1">Configure the Windows printer queue for silent printing. Paper size, tray, and finishing are controlled by the queue's own defaults.</p>
+    </div>
+
+    <div class="p-6">
+        <form hx-post="/settings?handler=Printing" hx-swap="outerHTML" class="max-w-md">
+            @Html.AntiForgeryToken()
+
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-slate-700 mb-2">@Loc["Settings_PrinterLabel"]</label>
+                <select name="PrinterA4" class="w-full h-11 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                    <option value="">-- Do not print silently --</option>
+                    @foreach (var printer in Model.InstalledPrinters)
+                    {
+                        if (Model.Settings?.PrinterA4 == printer)
+                        {
+                            <option value="@printer" selected>@printer</option>
+                        }
+                        else
+                        {
+                            <option value="@printer">@printer</option>
+                        }
+                    }
+                </select>
+                <p class="mt-2 text-xs text-slate-500">@Loc["Settings_PrinterDesc"]</p>
+            </div>
+
+            <button type="submit" class="h-10 px-6 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-sm">
+                @Loc["Settings_PrinterLabel"]
+            </button>
+            <div class="mt-4" id="printing-save-result"></div>
+        </form>
+    </div>
+</div>

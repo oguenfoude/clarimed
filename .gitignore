@@ -24,7 +24,7 @@ Output/
 logs/
 templates/uploads/
 dcm/
-
+DicomSender
 # Build Logs
 *.binlog
 msbuild.binlog

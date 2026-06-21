@@ -2,7 +2,6 @@ using System.Text;
 using FocusMed.Data;
 using FocusMed.Data.Models;
 using FocusMed.Data.Services;
-using FocusMed.Imaging.Converters;
 using FellowOakDicom;
 using FellowOakDicom.Imaging;
 using FellowOakDicom.Network;
@@ -98,7 +97,6 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
             // Create a new scope for database operations
             using var scope = _rootProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
-            var imageConverter = scope.ServiceProvider.GetRequiredService<IImageConverter>();
 
             var dataset = request.Dataset;
 
