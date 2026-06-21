@@ -181,7 +181,9 @@ public class PreviewModel : PageModel
         }).GeneratePdf(reportPdfPath);
 
         // 3. Merge
-        string finalOutputPath = Path.Combine(outputDir, $"Merged_{study.AccessionNumber}_{Guid.NewGuid()}.pdf");
+        string finalOutputDir = Path.GetFullPath(_config["FocusMed:MergedPdfOutputPath"] ?? Path.Combine("data", "output"));
+        Directory.CreateDirectory(finalOutputDir);
+        string finalOutputPath = Path.Combine(finalOutputDir, $"Merged_{study.AccessionNumber}_{Guid.NewGuid()}.pdf");
         await _pdfMerger.MergeAsync(coverPdfPath, actualReportPdfPath, new[] { reportPdfPath }, Array.Empty<string>(), finalOutputPath, CancellationToken.None);
 
         // Cleanup
@@ -193,7 +195,8 @@ public class PreviewModel : PageModel
 
     public IActionResult OnGetDownloadPdf(string file)
     {
-        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documents", "Temp", file);
+        string outputDir = Path.GetFullPath(_config["FocusMed:MergedPdfOutputPath"] ?? Path.Combine("data", "output"));
+        var path = Path.Combine(outputDir, file);
         if (!System.IO.File.Exists(path)) return NotFound();
         // Return inline to display in the iframe, DO NOT add the fileDownloadName parameter
         return PhysicalFile(path, "application/pdf");

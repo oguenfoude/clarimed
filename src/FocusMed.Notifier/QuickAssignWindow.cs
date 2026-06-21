@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+#pragma warning disable CS8618
+
 namespace FocusMed.Notifier;
 
 public class QuickAssignWindow : Form

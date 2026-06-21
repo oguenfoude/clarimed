@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using System.Globalization;
 using FocusMed.Data;
 using FocusMed.Data.Models;
 using FocusMed.Data.Services;
@@ -18,6 +19,17 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+
+
+var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+if (!string.IsNullOrEmpty(exePath))
+{
+    var exeDir = Path.GetDirectoryName(exePath);
+    if (!string.IsNullOrEmpty(exeDir))
+    {
+        Directory.SetCurrentDirectory(exeDir);
+    }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -201,6 +213,25 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/documents"
 });
 
+app.Use(async (context, next) =>
+{
+    var scopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+    using var scope = scopeFactory.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<FocusMed.Data.Services.IClinicSettingsRepository>();
+    var settings = await repo.GetAsync();
+    var lang = settings.Language ?? "en";
+    
+    var culture = lang.StartsWith("fr", StringComparison.OrdinalIgnoreCase) 
+        ? new System.Globalization.CultureInfo("fr-FR") 
+        : new System.Globalization.CultureInfo("en-US");
+        
+    System.Globalization.CultureInfo.CurrentCulture = culture;
+    System.Globalization.CultureInfo.CurrentUICulture = culture;
+    context.Items["CurrentLanguage"] = lang;
+
+    await next();
+});
+
 app.UseRouting();
 
 // ── Authentication & Authorization middleware ──
@@ -224,37 +255,44 @@ app.Lifetime.ApplicationStarted.Register(() =>
 {
     try
     {
-        Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true });
-        
-        // Auto-launch the Notifier tray app so the user doesn't have to start it manually
-        var notifierPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.Notifier.exe"));
-        Console.WriteLine($"[DEBUG] Notifier path: {notifierPath}");
-        if (File.Exists(notifierPath))
+        // Only open browser automatically when running interactively (not as a Windows Service)
+        if (!OperatingSystem.IsWindows() || !System.ServiceProcess.ServiceController.GetServices().Any(s => s.ServiceName == "FocusMed" && s.Status == System.ServiceProcess.ServiceControllerStatus.Running))
         {
-            var p = Process.GetProcessesByName("FocusMed.Notifier");
-            Console.WriteLine($"[DEBUG] Notifier processes running: {p.Length}");
-            foreach (var proc in p)
+            Process.Start(new ProcessStartInfo { FileName = "http://localhost:5000", UseShellExecute = true });
+        }
+
+        // Auto-launch Notifier: try sibling "Notifier" folder (production layout),
+        // then fall back to dev Debug path.
+        var baseDir = AppContext.BaseDirectory;
+        var productionNotifier = Path.GetFullPath(Path.Combine(baseDir, "..", "Notifier", "FocusMed.exe"));
+        var devNotifier = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.exe"));
+
+        var notifierPath = File.Exists(productionNotifier) ? productionNotifier
+                         : File.Exists(devNotifier) ? devNotifier
+                         : null;
+
+        Console.WriteLine($"[INFO] Notifier path: {notifierPath ?? "not found"}");
+
+        if (notifierPath != null)
+        {
+            // Kill any existing instances first
+            foreach (var proc in Process.GetProcessesByName("FocusMed"))
             {
                 try { proc.Kill(); } catch { }
             }
-            
-            var pinfo = new ProcessStartInfo 
-            { 
-                FileName = notifierPath, 
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = notifierPath,
                 WorkingDirectory = Path.GetDirectoryName(notifierPath),
-                UseShellExecute = true 
-            };
-            var started = Process.Start(pinfo);
-            Console.WriteLine($"[DEBUG] Notifier started: {started != null}");
-        }
-        else
-        {
-            Console.WriteLine($"[DEBUG] Notifier exe not found at {notifierPath}");
+                UseShellExecute = true
+            });
+            Console.WriteLine("[INFO] Notifier started.");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[DEBUG] Error starting processes: {ex}");
+        Console.WriteLine($"[WARNING] Error starting processes: {ex.Message}");
     }
 });
 

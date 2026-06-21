@@ -38,7 +38,12 @@ public class SettingsModel : PageModel
             {
                 var ips = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
                     .Where(ni => ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && 
-                                 ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                                 ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback &&
+                                 (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Ethernet ||
+                                  ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211) &&
+                                 !ni.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
+                                 !ni.Description.Contains("Hyper-V", StringComparison.OrdinalIgnoreCase) &&
+                                 !ni.Description.Contains("vEthernet", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
                     .Where(ua => ua.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                     .Select(ua => ua.Address.ToString())

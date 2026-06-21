@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\Payload.zip">
+    <EmbeddedResource Include="..\..\Payload2.zip">
       <LogicalName>Payload.zip</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="..\FocusMed.Dashboard\wwwroot\logo.png">

@@ -6,11 +6,24 @@ static class Program
     ///  The main entry point for the application.
     /// </summary>
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
-        Application.Run(new Form1());
-    }    
+
+        string exeName = System.IO.Path.GetFileNameWithoutExtension(Application.ExecutablePath).ToLower();
+
+        if (args.Contains("--uninstall") || exeName.Contains("uninstall"))
+        {
+            Application.Run(new Form1(true));
+            return;
+        }
+        
+        if (args.Contains("--restart") || exeName.Contains("restart"))
+        {
+            Form1.RestartSystem();
+            return;
+        }
+
+        Application.Run(new Form1(false));
+    }
 }

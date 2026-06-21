@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+#pragma warning disable CS0414
+
 namespace FocusMed.Notifier;
 
 public class NotifierApplicationContext : ApplicationContext
@@ -70,6 +72,10 @@ public class NotifierApplicationContext : ApplicationContext
                     }
                 }
             }
+        }
+        catch (HttpRequestException)
+        {
+            // Expected when the server is offline or restarting. Do not log.
         }
         catch (Exception ex)
         {
