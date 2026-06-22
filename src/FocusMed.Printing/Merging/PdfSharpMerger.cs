@@ -120,12 +120,10 @@ public class PdfSharpMerger : IPdfMerger
         if (columnsPerRow <= 0) columnsPerRow = 1;
         double gap = Math.Max(0, gapPx);
 
-        int rowsPerPage = (int)Math.Ceiling(imagesPerPage / (double)columnsPerRow);
-        double margin = gap;
+        // PDF margin = 2 * gapPx per architectural rules
+        double margin = 2 * gap;
         double usableWidth = A4WidthPt - (2 * margin);
         double usableHeight = A4HeightPt - (2 * margin);
-        double cellWidth = (usableWidth - gap * (columnsPerRow - 1)) / columnsPerRow;
-        double cellHeight = (usableHeight - gap * (rowsPerPage - 1)) / rowsPerPage;
 
         for (int pageStart = 0; pageStart < imagePaths.Count; pageStart += imagesPerPage)
         {
@@ -136,28 +134,72 @@ public class PdfSharpMerger : IPdfMerger
             using var gfx = XGraphics.FromPdfPage(page);
 
             int count = Math.Min(imagesPerPage, imagePaths.Count - pageStart);
+            int actualRows = (int)Math.Ceiling(count / (double)columnsPerRow);
 
+            // Step 1: Layout as if width is fully utilized (mimicking HTML grid behavior)
+            double cellWidth = (usableWidth - gap * (columnsPerRow - 1)) / columnsPerRow;
+            double[] rowHeights = new double[actualRows];
+
+            // Load images and calculate intrinsic row heights
+            var pageImages = new XImage[count];
             for (int idx = 0; idx < count; idx++)
             {
-                int col = idx % columnsPerRow;
-                int row = idx / columnsPerRow;
-
-                double cellX = margin + col * (cellWidth + gap);
-                double cellY = margin + row * (cellHeight + gap);
-
                 var imagePath = imagePaths[pageStart + idx];
-                using var image = XImage.FromFile(imagePath);
+                var img = XImage.FromFile(imagePath);
+                pageImages[idx] = img;
 
-                double scaleX = cellWidth / image.PixelWidth;
-                double scaleY = cellHeight / image.PixelHeight;
-                double scale = Math.Min(scaleX, scaleY);
+                int row = idx / columnsPerRow;
+                double scaledH = img.PixelHeight * (cellWidth / img.PixelWidth);
+                if (scaledH > rowHeights[row])
+                {
+                    rowHeights[row] = scaledH;
+                }
+            }
 
-                double scaledW = image.PixelWidth * scale;
-                double scaledH = image.PixelHeight * scale;
-                double drawX = cellX + (cellWidth - scaledW) / 2;
-                double drawY = cellY + (cellHeight - scaledH) / 2;
+            double totalGridHeight = rowHeights.Sum() + gap * (actualRows - 1);
 
-                gfx.DrawImage(image, drawX, drawY, scaledW, scaledH);
+            // Step 2: Scale down the entire grid if it exceeds A4 page height
+            double gridScale = 1.0;
+            if (totalGridHeight > usableHeight && totalGridHeight > 0)
+            {
+                gridScale = usableHeight / totalGridHeight;
+            }
+
+            double finalCellWidth = cellWidth * gridScale;
+            double finalGap = gap * gridScale;
+            for (int r = 0; r < actualRows; r++) rowHeights[r] *= gridScale;
+
+            // Center horizontally if scaled down
+            double offsetX = margin + (usableWidth - (usableWidth * gridScale)) / 2;
+            double currentY = margin;
+
+            // Step 3: Draw images
+            for (int r = 0; r < actualRows; r++)
+            {
+                for (int c = 0; c < columnsPerRow; c++)
+                {
+                    int idx = r * columnsPerRow + c;
+                    if (idx >= count) break;
+
+                    var img = pageImages[idx];
+                    
+                    double drawX = offsetX + c * (finalCellWidth + finalGap);
+                    double drawY = currentY;
+                    
+                    // w-full h-auto equivalent
+                    double finalImgW = finalCellWidth;
+                    double finalImgH = img.PixelHeight * (finalCellWidth / img.PixelWidth);
+
+                    gfx.DrawImage(img, drawX, drawY, finalImgW, finalImgH);
+                }
+                
+                currentY += rowHeights[r] + finalGap;
+            }
+
+            // Cleanup
+            foreach (var img in pageImages)
+            {
+                img.Dispose();
             }
         }
     }

@@ -16,6 +16,7 @@ public class QuickAssignWindow : Form
     private readonly int _inboxDocumentId;
 
     private TextBox _searchBox = null!;
+    private TextBox _documentNameBox = null!;
     private DataGridView _grid = null!;
 
     private System.Windows.Forms.Timer _debounceTimer = null!;
@@ -113,6 +114,13 @@ public class QuickAssignWindow : Form
         _searchBox = new TextBox { Location = new Point(130, 15), Width = 380, Font = new Font("Segoe UI", 11F) };
         searchPanel.Controls.Add(lblSearch);
         searchPanel.Controls.Add(_searchBox);
+
+        // 1b. Document Name Box
+        var namePanel = new Panel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(15) };
+        var lblName = new Label { Text = "Document Name:", AutoSize = true, Location = new Point(15, 18), ForeColor = Color.FromArgb(71, 85, 105) };
+        _documentNameBox = new TextBox { Location = new Point(130, 15), Width = 380, Font = new Font("Segoe UI", 11F), PlaceholderText = "e.g. Ultrasound Report (Optional)" };
+        namePanel.Controls.Add(lblName);
+        namePanel.Controls.Add(_documentNameBox);
 
         _debounceTimer = new System.Windows.Forms.Timer { Interval = 400 };
         _debounceTimer.Tick += async (s, e) =>
@@ -238,7 +246,7 @@ public class QuickAssignWindow : Form
         try
         {
             SetLoading(true, "Assigning document...");
-            var res = await _http.PostAsJsonAsync($"/api/quickassign/{_inboxDocumentId}/assign", new { StudyId = studyId });
+            var res = await _http.PostAsJsonAsync($"/api/quickassign/{_inboxDocumentId}/assign", new { StudyId = studyId, DocumentName = _documentNameBox.Text });
             if (res.IsSuccessStatusCode)
             {
                 MessageBox.Show("Document successfully assigned!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);

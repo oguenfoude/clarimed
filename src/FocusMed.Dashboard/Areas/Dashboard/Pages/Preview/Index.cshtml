@@ -228,7 +228,7 @@
                     <div class="w-[794px] h-[1123px] bg-white shadow-xl mx-auto mb-10 relative overflow-hidden flex-shrink-0 a4-page ring-1 ring-slate-900/5 transition-all print:shadow-none print:ring-0 print:mb-0">
                         <div class="absolute bottom-5 right-8 flex gap-2 z-10 print:hidden">
                             <div class="text-[11px] text-slate-400 font-bold bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
-                                @Loc["Preview_ReportDocument"]
+                                @(Model.LinkedDocument.OriginalFileName == "incoming_print.pdf" ? Loc["Preview_ReportDocument"].ToString() : Model.LinkedDocument.OriginalFileName)
                             </div>
                         </div>
                         <iframe src="/documents/view/@Model.LinkedDocument.Id#toolbar=0&navpanes=0&scrollbar=0" class="w-full h-full border-0"></iframe>

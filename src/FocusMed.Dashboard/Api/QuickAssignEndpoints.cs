@@ -78,6 +78,11 @@ public static class QuickAssignEndpoints
             if (!studyExists) return Results.NotFound("Study not found.");
 
             doc.StudyId = req.StudyId;
+            if (!string.IsNullOrWhiteSpace(req.DocumentName))
+            {
+                doc.OriginalFileName = req.DocumentName.Trim();
+            }
+            
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, studyId = req.StudyId });
@@ -109,4 +114,5 @@ public static class QuickAssignEndpoints
 public class AssignRequest
 {
     public int StudyId { get; set; }
+    public string? DocumentName { get; set; }
 }

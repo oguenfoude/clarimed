@@ -24,7 +24,7 @@ public class DicomServer : IDicomServer, IDisposable
     {
         _logger.LogInformation("Starting DICOM server — AE Title: {AETitle}, Port: {Port}", aeTitle, port);
 
-        _server = FellowOakDicom.Network.DicomServerFactory.Create<Handlers.CStoreScp>(port);
+        _server = FellowOakDicom.Network.DicomServerFactory.Create<Handlers.DicomScp>(port);
 
         _logger.LogInformation("DICOM server is listening on port {Port}", port);
 

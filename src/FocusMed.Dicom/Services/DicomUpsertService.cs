@@ -131,7 +131,7 @@ public class DicomUpsertService
             study = new Study
             {
                 StudyInstanceUid = tags.StudyUid,
-                PatientId = patient.Id,
+                Patient = patient,
                 AccessionNumber = tags.Accession,
                 StudyDescription = tags.StudyDesc,
                 Modality = tags.Modality,
@@ -158,7 +158,7 @@ public class DicomUpsertService
             series = new Data.Models.Series
             {
                 SeriesInstanceUid = tags.SeriesUid,
-                StudyId = study.Id,
+                Study = study,
                 SeriesNumber = tags.SeriesNumber,
                 Modality = tags.Modality,
                 SeriesDescription = tags.SeriesDesc,
