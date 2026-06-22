@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FocusMed.Data;
+using FocusMed.Data.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace FocusMed.Worker.Services;
@@ -8,10 +9,10 @@ public class UpdateCheckerService : BackgroundService
 {
     private readonly ILogger<UpdateCheckerService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly HttpClient _httpClient;
+    private static readonly HttpClient _httpClient = new();
     private readonly TimeSpan _pollInterval = TimeSpan.FromHours(1);
     private const string CurrentVersion = "v1.0.0";
-    private const string RepoUrl = "https://api.github.com/repos/microsoft/PowerToys/releases/latest"; // Dummy repo for testing
+    private const string RepoUrl = "https://api.github.com/repos/microsoft/PowerToys/releases/latest";
 
     public UpdateCheckerService(
         ILogger<UpdateCheckerService> logger,
@@ -19,8 +20,7 @@ public class UpdateCheckerService : BackgroundService
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
-        _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "FocusMed-UpdateChecker");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FocusMed-UpdateChecker");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,10 +55,8 @@ public class UpdateCheckerService : BackgroundService
     private async Task CheckForUpdatesAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
-
-        var settings = await db.ClinicSettings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
-        if (settings == null) return;
+        var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
+        var settings = await settingsRepo.GetAsync();
 
         var response = await _httpClient.GetAsync(RepoUrl, ct);
         if (!response.IsSuccessStatusCode)
@@ -79,7 +77,7 @@ public class UpdateCheckerService : BackgroundService
                     _logger.LogInformation("New update available: {LatestVersion} (Current: {CurrentVersion})", latestVersion, CurrentVersion);
                     settings.UpdateAvailable = true;
                     settings.LatestVersion = latestVersion;
-                    await db.SaveChangesAsync(ct);
+                    await settingsRepo.UpdateAsync(settings);
                 }
             }
             else
@@ -88,7 +86,7 @@ public class UpdateCheckerService : BackgroundService
                 {
                     settings.UpdateAvailable = false;
                     settings.LatestVersion = string.Empty;
-                    await db.SaveChangesAsync(ct);
+                    await settingsRepo.UpdateAsync(settings);
                 }
             }
         }

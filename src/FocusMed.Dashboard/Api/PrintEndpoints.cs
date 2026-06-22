@@ -12,9 +12,11 @@ using FocusMed.Printing.SilentPrint;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using FocusMed.Data.Services;
 
 namespace FocusMed.Dashboard.Api;
 
@@ -36,14 +38,18 @@ public static class PrintEndpoints
             int studyId,
             [FromQuery] PrintFormat printFormat,
             [FromBody] PrintJobRequest? body,
-            FocusMedDbContext db,
-            ICoverPageGenerator coverGenerator,
-            IPdfMerger pdfMerger,
-            ISilentPrinter silentPrinter,
-            IConfiguration config,
+            IServiceProvider sp,
             ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("PrintEndpoints");
+
+            using var scope = sp.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
+            var coverGenerator = scope.ServiceProvider.GetRequiredService<ICoverPageGenerator>();
+            var pdfMerger = scope.ServiceProvider.GetRequiredService<IPdfMerger>();
+            var silentPrinter = scope.ServiceProvider.GetRequiredService<ISilentPrinter>();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
             var study = await db.Studies
                 .Include(s => s.Patient)
@@ -53,7 +59,7 @@ public static class PrintEndpoints
 
             if (study == null) return Results.NotFound("Study not found.");
 
-            var settings = await db.ClinicSettings.FirstOrDefaultAsync();
+            var settings = await settingsRepo.GetAsync();
             var targetPrinterName = settings?.PrinterA4;
 
             if (string.IsNullOrWhiteSpace(targetPrinterName))
@@ -64,19 +70,7 @@ public static class PrintEndpoints
                 var tempDir = Path.Combine(AppContext.BaseDirectory, "Documents", "Temp");
                 Directory.CreateDirectory(tempDir);
 
-                var coverCtx = new PrintJobContext(
-                    settings?.ClinicName ?? "FocusMed Clinic",
-                    study.Patient.Name,
-                    study.Patient.PatientId,
-                    study.StudyDescription,
-                    study.Modality,
-                    study.StudyDate ?? study.CreatedAt,
-                    study.ReferringPhysicianName,
-                    study.InstitutionName,
-                    study.Patient.Sex,
-                    study.Patient.BirthDate,
-                    study.AccessionNumber
-                );
+                var coverCtx = BuildPrintJobContext(study, settings);
                 var coverPdfPath = await coverGenerator.GenerateAsync(coverCtx, tempDir, CancellationToken.None);
 
                 var doc = await db.Documents
@@ -99,6 +93,9 @@ public static class PrintEndpoints
 
                 await silentPrinter.PrintPdfAsync(finalPdfPath, targetPrinterName, printFormat, CancellationToken.None);
 
+                try { File.Delete(coverPdfPath); } catch { }
+                if (finalPdfPath != null) try { File.Delete(finalPdfPath); } catch { }
+
                 return Results.Ok(new { success = true, message = "Sent to printer." });
             }
             catch (Exception ex)
@@ -112,13 +109,17 @@ public static class PrintEndpoints
             int studyId,
             [FromQuery] PrintFormat printFormat,
             [FromBody] PrintJobRequest? body,
-            FocusMedDbContext db,
-            ICoverPageGenerator coverGenerator,
-            IPdfMerger pdfMerger,
-            IConfiguration config,
+            IServiceProvider sp,
             ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("PrintEndpoints");
+
+            using var scope = sp.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
+            var coverGenerator = scope.ServiceProvider.GetRequiredService<ICoverPageGenerator>();
+            var pdfMerger = scope.ServiceProvider.GetRequiredService<IPdfMerger>();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
             var study = await db.Studies
                 .Include(s => s.Patient)
@@ -133,21 +134,8 @@ public static class PrintEndpoints
                 var tempDir = Path.Combine(AppContext.BaseDirectory, "Documents", "Temp");
                 Directory.CreateDirectory(tempDir);
 
-                var settings = await db.ClinicSettings.FirstOrDefaultAsync();
-
-                var coverCtx = new PrintJobContext(
-                    settings?.ClinicName ?? "FocusMed Clinic",
-                    study.Patient.Name,
-                    study.Patient.PatientId,
-                    study.StudyDescription,
-                    study.Modality,
-                    study.StudyDate ?? study.CreatedAt,
-                    study.ReferringPhysicianName,
-                    study.InstitutionName,
-                    study.Patient.Sex,
-                    study.Patient.BirthDate,
-                    study.AccessionNumber
-                );
+                var settings = await settingsRepo.GetAsync();
+                var coverCtx = BuildPrintJobContext(study, settings);
                 var coverPdfPath = await coverGenerator.GenerateAsync(coverCtx, tempDir, CancellationToken.None);
 
                 var doc = await db.Documents
@@ -168,8 +156,8 @@ public static class PrintEndpoints
                     coverPdfPath, reportPdfPath, new string[0],
                     pngPaths, finalPdfPath, printFormat, ipp, cols, gap, CancellationToken.None);
 
-                var bytes = await System.IO.File.ReadAllBytesAsync(finalPdfPath);
-                return Results.File(bytes, "application/pdf", $"Study_{studyId}.pdf");
+                var stream = new FileStream(finalPdfPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920);
+                return Results.File(stream, "application/pdf", $"Study_{studyId}.pdf");
             }
             catch (Exception ex)
             {
@@ -180,19 +168,23 @@ public static class PrintEndpoints
 
         group.MapPost("/silent-existing/{studyId:int}", async (
             int studyId,
-            string file,
+            [FromQuery] string file,
             [FromQuery] PrintFormat printFormat,
-            FocusMedDbContext db,
-            ISilentPrinter silentPrinter,
-            IConfiguration config,
+            IServiceProvider sp,
             ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("PrintEndpoints");
 
+            using var scope = sp.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
+            var silentPrinter = scope.ServiceProvider.GetRequiredService<ISilentPrinter>();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
             if (string.IsNullOrWhiteSpace(file) || file.Contains("/") || file.Contains("\\"))
                 return Results.BadRequest("Invalid file parameter.");
 
-            var settings = await db.ClinicSettings.FirstOrDefaultAsync();
+            var settings = await settingsRepo.GetAsync();
             var targetPrinterName = settings?.PrinterA4;
 
             if (string.IsNullOrWhiteSpace(targetPrinterName))
@@ -217,7 +209,24 @@ public static class PrintEndpoints
         });
     }
 
-    private static string[] ResolveImagePaths(string[]? orderedPaths, Study study, IConfiguration config)
+    private static PrintJobContext BuildPrintJobContext(Study study, ClinicSettings? settings)
+    {
+        return new PrintJobContext(
+            ClinicName: settings?.ClinicName ?? "FocusMed Clinic",
+            PatientName: study.Patient?.Name ?? "Unknown",
+            PatientId: study.Patient?.PatientId ?? "Unknown",
+            StudyDescription: study.StudyDescription ?? "Medical Imaging Report",
+            Modality: study.Modality,
+            StudyDate: study.StudyDate ?? study.CreatedAt,
+            ReferringPhysician: study.ReferringPhysicianName,
+            InstitutionName: study.InstitutionName,
+            PatientSex: study.Patient?.Sex,
+            PatientBirthDate: study.Patient?.BirthDate,
+            AccessionNumber: study.AccessionNumber
+        );
+    }
+
+    internal static string[] ResolveImagePaths(string[]? orderedPaths, Study study, IConfiguration config)
     {
         if (orderedPaths != null && orderedPaths.Length > 0)
         {

@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using FocusMed.Data;
 using FocusMed.Data.Models;
@@ -17,17 +16,6 @@ public static class QuickAssignEndpoints
     public static void MapQuickAssignEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/quickassign");
-
-        // Loopback-only filter
-        group.AddEndpointFilter(async (context, next) =>
-        {
-            var ip = context.HttpContext.Connection.RemoteIpAddress;
-            if (ip == null || !IPAddress.IsLoopback(ip))
-            {
-                return Results.Forbid();
-            }
-            return await next(context);
-        });
 
         // 1. GET /api/quickassign/pending
         group.MapGet("/pending", async (FocusMedDbContext db) =>
@@ -95,13 +83,12 @@ public static class QuickAssignEndpoints
             return Results.Ok(new { success = true, studyId = req.StudyId });
         });
 
-        // 3.5 DELETE /api/quickassign/{id}
+        // 4. DELETE /api/quickassign/{id}
         group.MapDelete("/{id:int}", async (int id, FocusMedDbContext db) =>
         {
             var doc = await db.Documents.FirstOrDefaultAsync(d => d.Id == id);
             if (doc == null) return Results.NotFound("Document not found.");
 
-            // Delete physical files to prevent orphaned files
             if (!string.IsNullOrEmpty(doc.OriginalFilePath) && System.IO.File.Exists(doc.OriginalFilePath))
             {
                 try { System.IO.File.Delete(doc.OriginalFilePath); } catch { }
@@ -116,8 +103,6 @@ public static class QuickAssignEndpoints
 
             return Results.Ok(new { success = true });
         });
-
-
     }
 }
 

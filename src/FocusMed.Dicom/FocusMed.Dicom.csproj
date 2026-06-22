@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FocusMed.Data\FocusMed.Data.csproj" />
-    <ProjectReference Include="..\FocusMed.Imaging\FocusMed.Imaging.csproj" />
     <ProjectReference Include="..\FocusMed.Printing\FocusMed.Printing.csproj" />
   </ItemGroup>
 

@@ -40,7 +40,7 @@ public class PatientsModel : PageModel
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
         await LoadAsync(db, search, modality, status, startDate, endDate, isInitialLoad: false);
-        return Partial("Shared/_PatientsTable", this);
+        return Partial("_PatientsTable", this);
     }
 
     private async Task LoadAsync(FocusMedDbContext db, string? search, string? modality, string? status, string? startDate, string? endDate, bool isInitialLoad)

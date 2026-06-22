@@ -7,24 +7,21 @@ namespace FocusMed.Worker.Services;
 /// <summary>
 /// Background service that monitors studies in "Receiving" state and marks them
 /// as "Complete" once the stabilization window expires (no new files arrived).
-///
-/// This is purely for status tracking and dashboard visibility.
-/// It does NOT create PrintJobs or trigger any printing.
 /// </summary>
 public class StudyCompletionService : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<StudyCompletionService> _logger;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
 
     public StudyCompletionService(
-        IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         ILogger<StudyCompletionService> logger)
     {
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
     }
@@ -62,14 +59,13 @@ public class StudyCompletionService : BackgroundService
 
     private async Task CheckForCompletedStudiesAsync(TimeSpan stabilizationWindow, CancellationToken ct)
     {
-        using var scope = _serviceProvider.CreateScope();
+        using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
 
         var cutoff = DateTime.UtcNow - stabilizationWindow;
 
         var receivingStudies = await db.Studies
             .Where(s => s.Status == StudyStatus.Receiving && s.LastImageReceivedAt < cutoff)
-            .Include(s => s.Patient)
             .OrderBy(s => s.LastImageReceivedAt)
             .ToListAsync(ct);
 
@@ -83,8 +79,8 @@ public class StudyCompletionService : BackgroundService
             study.CompletedAt = DateTime.UtcNow;
 
             _logger.LogInformation(
-                "✅ Study complete: {Patient} | {Modality} | {ImageCount} image(s) | Study: {Description}",
-                study.Patient?.Name ?? "Unknown",
+                "Study complete: {StudyUid} | {Modality} | {ImageCount} image(s) | Study: {Description}",
+                study.StudyInstanceUid,
                 study.Modality,
                 study.ImageCount,
                 study.StudyDescription);

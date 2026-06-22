@@ -32,26 +32,6 @@ public class StudyRepository : IStudyRepository
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Study>> GetByPatientAsync(int patientId)
-    {
-        return await _db.Studies
-            .AsNoTracking()
-            .Where(s => s.PatientId == patientId)
-            .OrderByDescending(s => s.StudyDate)
-            .Include(s => s.Patient)
-            .ToListAsync();
-    }
-
-    public async Task<IReadOnlyList<Study>> GetReceivingStudiesOlderThanAsync(TimeSpan stabilizationWindow)
-    {
-        var cutoff = DateTime.UtcNow - stabilizationWindow;
-        return await _db.Studies
-            .Where(s => s.Status == StudyStatus.Receiving && s.LastImageReceivedAt < cutoff)
-            .Include(s => s.Patient)
-            .OrderBy(s => s.LastImageReceivedAt)
-            .ToListAsync();
-    }
-
     public async Task<Study> AddAsync(Study study)
     {
         _db.Studies.Add(study);
@@ -66,12 +46,7 @@ public class StudyRepository : IStudyRepository
 
     public async Task<int> GetCountAsync()
     {
-        return await _db.Studies.CountAsync();
-    }
-
-    public async Task<int> GetTotalImageCountAsync()
-    {
-        return await _db.Images.CountAsync();
+        return await _db.Studies.AsNoTracking().CountAsync();
     }
 
     public async Task<IReadOnlyList<ModalityCount>> GetModalityBreakdownAsync()
@@ -92,12 +67,12 @@ public class StudyRepository : IStudyRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var cleanSearch = search.Trim().ToLower();
-            query = query.Where(s => 
-                s.Patient.Name.ToLower().Contains(cleanSearch) ||
-                s.Patient.PatientId.ToLower().Contains(cleanSearch) ||
-                s.AccessionNumber.ToLower().Contains(cleanSearch) ||
-                s.StudyDescription.ToLower().Contains(cleanSearch));
+            var cleanSearch = search.Trim();
+            query = query.Where(s =>
+                EF.Functions.Like(s.Patient.Name, $"%{cleanSearch}%") ||
+                EF.Functions.Like(s.Patient.PatientId, $"%{cleanSearch}%") ||
+                EF.Functions.Like(s.AccessionNumber, $"%{cleanSearch}%") ||
+                EF.Functions.Like(s.StudyDescription, $"%{cleanSearch}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(modality) && !modality.Equals("All", StringComparison.OrdinalIgnoreCase))

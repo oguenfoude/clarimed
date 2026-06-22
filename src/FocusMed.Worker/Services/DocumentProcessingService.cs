@@ -20,20 +20,20 @@ public class DocumentProcessingService : BackgroundService
 {
     private readonly DocumentIngestionQueue _queue;
     private readonly IDocumentConverter _converter;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DocumentProcessingService> _logger;
 
     public DocumentProcessingService(
         DocumentIngestionQueue queue,
         IDocumentConverter converter,
-        IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         ILogger<DocumentProcessingService> logger)
     {
         _queue = queue;
         _converter = converter;
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
     }
@@ -70,7 +70,7 @@ public class DocumentProcessingService : BackgroundService
 
     private async Task ProcessDocumentAsync(IncomingDocument incoming, CancellationToken ct)
     {
-        using var scope = _serviceProvider.CreateScope();
+        using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
 
         var outputDir = _configuration["FocusMed:DocumentOutputPath"] ?? "data/Documents";

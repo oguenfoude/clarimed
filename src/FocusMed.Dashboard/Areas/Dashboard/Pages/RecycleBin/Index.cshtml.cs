@@ -85,7 +85,7 @@ public class RecycleBinModel : PageModel
     public async Task<IActionResult> OnGetTableAsync(string? search, DateTime? startDate, DateTime? endDate)
     {
         await OnGetAsync(search, startDate, endDate);
-        return Partial("Shared/_RecycleBinTable", this);
+        return Partial("_RecycleBinTable", this);
     }
 
     public async Task<IActionResult> OnPostRestoreAsync(int id)

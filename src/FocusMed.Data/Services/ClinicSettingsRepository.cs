@@ -6,6 +6,10 @@ namespace FocusMed.Data.Services;
 public class ClinicSettingsRepository : IClinicSettingsRepository
 {
     private readonly FocusMedDbContext _db;
+    private static ClinicSettings? _cached;
+    private static readonly object _lock = new();
+    private static DateTime _lastFetch = DateTime.MinValue;
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
 
     public ClinicSettingsRepository(FocusMedDbContext db)
     {
@@ -14,14 +18,36 @@ public class ClinicSettingsRepository : IClinicSettingsRepository
 
     public async Task<ClinicSettings> GetAsync()
     {
-        var settings = await _db.ClinicSettings.OrderBy(s => s.Id).FirstOrDefaultAsync();
+        lock (_lock)
+        {
+            if (_cached != null && DateTime.UtcNow - _lastFetch < CacheDuration)
+                return _cached;
+        }
+
+        var settings = await _db.ClinicSettings.AsNoTracking().OrderBy(s => s.Id).FirstOrDefaultAsync();
         if (settings == null)
         {
             settings = new ClinicSettings();
             _db.ClinicSettings.Add(settings);
             await _db.SaveChangesAsync();
         }
+
+        lock (_lock)
+        {
+            _cached = settings;
+            _lastFetch = DateTime.UtcNow;
+        }
+
         return settings;
+    }
+
+    public void InvalidateCache()
+    {
+        lock (_lock)
+        {
+            _cached = null;
+            _lastFetch = DateTime.MinValue;
+        }
     }
 
     public async Task UpdateAsync(ClinicSettings settings)
@@ -29,5 +55,6 @@ public class ClinicSettingsRepository : IClinicSettingsRepository
         settings.UpdatedAt = DateTime.UtcNow;
         _db.ClinicSettings.Update(settings);
         await _db.SaveChangesAsync();
+        InvalidateCache();
     }
 }

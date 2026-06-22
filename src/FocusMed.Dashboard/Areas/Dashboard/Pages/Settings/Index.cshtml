@@ -25,13 +25,6 @@
            class="block px-4 py-2.5 rounded-xl text-sm font-bold transition-colors @(Model.ActiveSection == "dicom" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800")">
             @Loc["Settings_DicomSettings"]
         </a>
-        @if (Model.IsAdmin)
-        {
-            <a href="/settings?section=users"
-               class="block px-4 py-2.5 rounded-xl text-sm font-bold transition-colors @(Model.ActiveSection == "users" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800")">
-                @Loc["Settings_UserManagement"]
-            </a>
-        }
     </div>
 
     <!-- Right Content -->
@@ -48,10 +41,6 @@
         else if (Model.ActiveSection == "printing")
         {
             @await Html.PartialAsync("_SettingsPrinting", Model)
-        }
-        else if (Model.ActiveSection == "users" && Model.IsAdmin)
-        {
-            @await Html.PartialAsync("_SettingsUsers", Model)
         }
     </div>
 </div>

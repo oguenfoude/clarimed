@@ -25,7 +25,7 @@ public class QuickAssignWindow : Form
     public QuickAssignWindow(int inboxDocumentId)
     {
         _inboxDocumentId = inboxDocumentId;
-        _http = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+        _http = new HttpClient { BaseAddress = new Uri("http://localhost:5000"), Timeout = TimeSpan.FromSeconds(10) };
 
         this.Text = "FocusMed - Assign Printed Document";
         this.Size = new Size(550, 650);
@@ -70,9 +70,32 @@ public class QuickAssignWindow : Form
         btnDismiss.FlatAppearance.BorderSize = 0;
         btnDismiss.Click += async (s, e) => 
         {
+            var confirm = MessageBox.Show(
+                "Are you sure you want to delete this document?\n\nThis cannot be undone.",
+                "Confirm Dismiss",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (confirm != DialogResult.Yes) return;
+
             SetLoading(true, "Dismissing...");
-            await _http.DeleteAsync($"/api/quickassign/{_inboxDocumentId}");
-            this.Close();
+            try
+            {
+                var res = await _http.DeleteAsync($"/api/quickassign/{_inboxDocumentId}");
+                if (res.IsSuccessStatusCode)
+                {
+                    this.Close();
+                }
+                else
+                {
+                    MessageBox.Show($"Failed to dismiss document (HTTP {(int)res.StatusCode}).", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    SetLoading(false, "Dismiss failed — try again");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error dismissing document: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetLoading(false, "Dismiss failed — server unreachable");
+            }
         };
 
         var headerRightPanel = new Panel { Dock = DockStyle.Right, Width = 120, Padding = new Padding(10) };
@@ -134,7 +157,8 @@ public class QuickAssignWindow : Form
             if (e.RowIndex >= 0)
             {
                 var studyId = (int)(_grid.Rows[e.RowIndex].Cells["StudyId"].Value ?? 0);
-                await AssignToStudy(studyId);
+                if (studyId > 0)
+                    await AssignToStudy(studyId);
             }
         };
 
@@ -192,6 +216,14 @@ public class QuickAssignWindow : Form
             }
             SetLoading(false, $"Found {results?.Length ?? 0} studies");
         }
+        catch (HttpRequestException ex)
+        {
+            SetLoading(false, $"Server error: {ex.StatusCode}");
+        }
+        catch (TaskCanceledException)
+        {
+            SetLoading(false, "Request timed out");
+        }
         catch (Exception ex)
         {
             SetLoading(false, "Error searching studies");
@@ -214,9 +246,19 @@ public class QuickAssignWindow : Form
             }
             else
             {
-                MessageBox.Show("Failed to assign document.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Failed to assign document (HTTP {(int)res.StatusCode}).", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetLoading(false, "Error assigning document");
             }
+        }
+        catch (HttpRequestException ex)
+        {
+            MessageBox.Show($"Server error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            SetLoading(false, "Error assigning document");
+        }
+        catch (TaskCanceledException)
+        {
+            MessageBox.Show("Request timed out.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            SetLoading(false, "Error assigning document");
         }
         catch (Exception ex)
         {

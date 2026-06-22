@@ -8,7 +8,6 @@ using FocusMed.Data.Models;
 using FocusMed.Data.Services;
 using FocusMed.Dicom;
 using FocusMed.Documents;
-using FocusMed.Imaging;
 using FocusMed.Printing;
 using FocusMed.Worker.Services;
 using FocusMed.Dashboard.Api;
@@ -105,7 +104,6 @@ Directory.CreateDirectory(imagesPath);
 
 // ── Register Application Layers ──
 builder.Services.AddFocusMedData(databasePath);
-builder.Services.AddFocusMedImaging();
 builder.Services.AddFocusMedDicom();
 builder.Services.AddFocusMedDocuments();
 builder.Services.AddFocusMedPrinting();
@@ -126,17 +124,7 @@ builder.Services.AddHostedService<RecycleBinCleanupService>();
 builder.Services.AddHostedService<DicomRestartService>();
 builder.Services.AddHostedService<UpdateCheckerService>();
 
-// ── Authentication (Cookie-based) ──
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login";
-        options.LogoutPath = "/login";
-        options.AccessDeniedPath = "/login";
-        options.ExpireTimeSpan = TimeSpan.FromHours(24);
-        options.SlidingExpiration = true;
-    });
-builder.Services.AddAuthorization();
+// ── Authentication (Cookie-based) removed per user request ──
 
 // ── Add Localization and Razor Pages support ──
 builder.Services.AddHttpContextAccessor();
@@ -145,26 +133,13 @@ builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// ── Initialize Database, License, and Seed Admin ──
+// ── Initialize Database and License ──
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
     db.Database.Migrate();
-
-    // Seed default admin user if no users exist
-    var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-    if (await userRepo.GetCountAsync() == 0)
-    {
-        await userRepo.AddAsync(new User
-        {
-            Username = "admin",
-            DisplayName = "Administrator",
-            Role = UserRole.Admin,
-            IsActive = true
-        }, "admin");
-    }
 }
 
 // ── Bridge DI for fo-dicom ──
@@ -208,9 +183,7 @@ app.Use(async (context, next) =>
 
 app.UseRouting();
 
-// ── Authentication & Authorization middleware ──
-app.UseAuthentication();
-app.UseAuthorization();
+// ── Authentication & Authorization middleware removed ──
 
 // Redirect root to dashboard
 app.MapGet("/", async context =>
@@ -253,14 +226,22 @@ try
     var existing = System.Diagnostics.Process.GetProcessesByName("FocusMed");
     if (existing.Length == 0)
     {
-        var notifierPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.exe"));
-        if (File.Exists(notifierPath))
+        // Check same directory first (production layout), then dev path (4 levels up from Worker output)
+        var baseDir = AppContext.BaseDirectory;
+        var sameDirPath = Path.Combine(baseDir, "FocusMed.exe");
+        var devPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "FocusMed.Notifier", "bin", "Debug", "net10.0-windows", "FocusMed.exe"));
+
+        var notifierPath = File.Exists(sameDirPath) ? sameDirPath
+                         : File.Exists(devPath) ? devPath
+                         : null;
+
+        if (notifierPath != null)
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = notifierPath,
                 UseShellExecute = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal
             });
         }
     }

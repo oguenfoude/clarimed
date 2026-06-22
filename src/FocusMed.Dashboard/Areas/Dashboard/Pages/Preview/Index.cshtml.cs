@@ -131,7 +131,6 @@ public class PreviewModel : PageModel
         string coverPdfPath = await _coverGenerator.GenerateAsync(context, outputDir, CancellationToken.None);
 
         // 2. Image Plates
-        QuestPDF.Settings.License = LicenseType.Community;
         string reportPdfPath = Path.Combine(outputDir, $"plates_{Guid.NewGuid()}.pdf");
 
         var imagesDir = Path.GetFullPath(_config["FocusMed:ImagesPath"] ?? Path.Combine("data", "images"));
@@ -306,7 +305,8 @@ public class PreviewModel : PageModel
     {
         try
         {
-            using var originalImage = System.Drawing.Image.FromFile(imagePath);
+            using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var originalImage = System.Drawing.Image.FromStream(stream);
 
             if (originalImage.Width <= maxSize && originalImage.Height <= maxSize)
             {

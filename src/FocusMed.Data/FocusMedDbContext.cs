@@ -16,7 +16,6 @@ public class FocusMedDbContext : DbContext
 
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<ClinicSettings> ClinicSettings => Set<ClinicSettings>();
-    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,11 +64,5 @@ public class FocusMedDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
         });
-
-        modelBuilder.Entity<User>(entity =>
-        {
-            entity.HasIndex(e => e.Username).IsUnique();
-        });
     }
 }
-

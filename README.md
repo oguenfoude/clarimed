@@ -92,6 +92,7 @@ flowchart TD
     Modality --"C-STORE\nTCP:1004"--> S1 --> CStore
     CStore --"Upsert Patient/Study/Series/Image"--> DB
     CStore --"Save .dcm"--> FS
+    CStore --"Convert to .png"--> FS
 
     WatchFolder --"*.docx created"--> FSW --"enqueue"--> Q
     S2 --> FSW
@@ -120,9 +121,8 @@ FocusMed/
 │
 ├── src/
 │   ├── FocusMed.Data/                    ← Data access layer (EF Core 8 + SQLite)
-│   ├── FocusMed.Dicom/                   ← DICOM network layer (fo-dicom)
+│   ├── FocusMed.Dicom/                   ← DICOM network layer (fo-dicom) + DicomUpsertService
 │   ├── FocusMed.Documents/               ← Document watcher + Spire conversion
-│   ├── FocusMed.Imaging/                 ← DICOM pixel → PNG conversion
 │   ├── FocusMed.Printing/                ← PDF generation (QuestPDF + PdfSharpCore + PdfiumViewer)
 │   ├── FocusMed.Dashboard/               ← Razor Pages web interface (Areas pattern)
 │   ├── FocusMed.Notifier/                ← Standalone WinForms tray app (auto-started by Worker)
@@ -138,9 +138,9 @@ FocusMed/
 ### Project Reference Graph
 
 ```
-Worker → Dicom, Imaging, Printing, Data, Documents, Dashboard
+Worker → Dicom, Printing, Data, Documents, Dashboard
 Dashboard → Data, Printing
-Dicom → Data, Imaging, Printing
+Dicom → Data, Printing
 Documents → Data
 Notifier → Data
 ```
@@ -160,8 +160,10 @@ Notifier → Data
 ### FocusMed.Dicom
 
 - `CStoreScp` handles C-STORE requests: extracts DICOM tags → upserts `Patient → Study → Series → DicomImage` → saves `.dcm` → converts pixels to `.png`.
+- `DicomUpsertService` — shared ingestion logic (tag extraction, entity upsert, file paths, PNG conversion, record save) used by both `CStoreScp` and `DicomFileIngestionService`.
 - Custom stable folder hashing (FNV-1a) is used to group study files deterministically.
 - `DicomFileIngestionService` supports batch import from local folders.
+- Per-study locking via `ConcurrentDictionary<string, SemaphoreSlim>` allows parallel ingestion of different studies while serializing images within the same study.
 
 ### FocusMed.Documents
 
@@ -188,6 +190,8 @@ Razor Pages class library using the ASP.NET Core **Areas pattern**. All pages re
 | **Preview** | `/preview/{id}` | Full study viewer: drag-reorder images, pick format, print or download |
 | **Recycle Bin** | `/recyclebin` | Soft-deleted studies — restore or permanent delete |
 | **Settings** | `/settings` | Clinic config, DICOM, file paths, printing, user management |
+
+Each page lives in its own subfolder with `Index.cshtml` / `Index.cshtml.cs`. Only `_Layout.cshtml` remains in `Shared/`.
 
 ### FocusMed.Notifier
 
@@ -496,3 +500,10 @@ dotnet watch run --project src\FocusMed.Worker
 11. **Manual Stop Page** — A dedicated `/system-stop` endpoint to gracefully stop all background services and the Kestrel host.
 12. **GitHub Auto-Update** — `UpdateCheckerService` polls GitHub for new releases. `FocusMed.Notifier` alerts the user and offers one-click update.
 13. **Notifier Auto-Start** — Worker launches the Notifier tray app on startup if it's not already running.
+14. **Per-Study DICOM Locking** — `ConcurrentDictionary<string, SemaphoreSlim>` allows parallel ingestion of different studies while serializing images within the same study.
+15. **ClinicSettings Caching** — 30-second TTL cache with invalidation on update eliminates a DB hit on every HTTP request.
+16. **Batched DB Writes** — DICOM ingestion batches all entity upserts into a single `SaveChangesAsync()` per study lock instead of separate saves per entity.
+17. **No Thread Pool Starvation** — `LocalizationService` uses async/await throughout; removed `.GetAwaiter().GetResult()` blocking calls.
+18. **Read-Only Query Optimization** — All read-only queries use `AsNoTracking()` for faster EF Core materialization.
+19. **N+1 Fix in RecycleBinCleanupService** — Pre-fetches all document paths in a single query instead of per-study.
+20. **Static HttpClient** — `UpdateCheckerService` uses a static `HttpClient` to prevent DNS staleness.

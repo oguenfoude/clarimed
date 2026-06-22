@@ -10,34 +10,32 @@ namespace FocusMed.Worker.Services;
 public class DicomListenerService : BackgroundService
 {
     private readonly IDicomServer _dicomServer;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DicomListenerService> _logger;
 
     public DicomListenerService(
         IDicomServer dicomServer,
-        IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         ILogger<DicomListenerService> logger)
     {
         _dicomServer = dicomServer;
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Read settings from config (with DB fallback)
         var configSection = _configuration.GetSection("FocusMed");
         var aeTitle = configSection.GetValue<string>("AETitle") ?? "FOCUSMED";
         var port = configSection.GetValue<int>("DicomPort");
         if (port == 0) port = 1004;
 
-        // Try loading from database
         try
         {
-            using var scope = _serviceProvider.CreateScope();
+            using var scope = _scopeFactory.CreateScope();
             var settingsRepo = scope.ServiceProvider.GetRequiredService<IClinicSettingsRepository>();
             var settings = await settingsRepo.GetAsync();
 
@@ -57,22 +55,19 @@ public class DicomListenerService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start DICOM server on port {Port}. The port may be in use by another process. DICOM reception is disabled for this session.", port);
-            return; // Don't crash the host — let other services continue
+            _logger.LogError(ex, "Failed to start DICOM server on port {Port}.", port);
+            return;
         }
 
-        // Keep running until cancellation
         try
         {
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
         catch (OperationCanceledException)
         {
-            // Expected on shutdown
         }
 
         await _dicomServer.StopAsync();
-
         _logger.LogInformation("FocusMed DICOM Listener stopped.");
     }
 }

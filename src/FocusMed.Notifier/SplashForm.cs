@@ -72,9 +72,26 @@ public class SplashForm : Form
         {
             statusLabel.Text = "Checking background services...";
             
-            // Check if Worker is running
+            // Check if Worker is running (by exe name or dotnet hosting)
             var workers = Process.GetProcessesByName("FocusMed.Worker");
             if (workers.Length == 0)
+            {
+                // Also check for dotnet processes that might be hosting the Worker (dev mode: dotnet run)
+                var dotnetProcs = Process.GetProcessesByName("dotnet");
+                foreach (var dp in dotnetProcs)
+                {
+                    try
+                    {
+                        var cmdLine = dp.MainModule?.FileName ?? "";
+                        if (cmdLine.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
+                        {
+                            workers = new[] { dp };
+                            break;
+                        }
+                    }
+                    catch { /* Access denied for some processes */ }
+                }
+            }
             {
                 statusLabel.Text = "Starting Local Server...";
                 
@@ -118,7 +135,7 @@ public class SplashForm : Form
             {
                 try
                 {
-                    var response = await client.GetAsync("http://localhost:5000/login");
+                    var response = await client.GetAsync("http://localhost:5000/dashboard");
                     if (response.IsSuccessStatusCode)
                     {
                         isReady = true;

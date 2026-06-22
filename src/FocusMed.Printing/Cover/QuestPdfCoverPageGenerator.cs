@@ -49,6 +49,7 @@ public class QuestPdfCoverPageGenerator : ICoverPageGenerator
     {
         return Task.Run(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(outputDir);
             var filePath = Path.Combine(outputDir, $"Cover_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 

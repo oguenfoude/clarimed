@@ -19,10 +19,18 @@ public class NotifierApplicationContext : ApplicationContext
     private readonly HttpClient _http;
     private QuickAssignWindow? _currentAssignWindow;
     private HashSet<int> _shownDocumentIds = new();
+    private readonly string _logDir;
+    private readonly string _logFile;
 
     public NotifierApplicationContext()
     {
-        _http = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+        _logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FocusMed", "logs");
+        Directory.CreateDirectory(_logDir);
+        _logFile = Path.Combine(_logDir, "notifier.log");
+
+        Log("Notifier started");
+
+        _http = new HttpClient { BaseAddress = new Uri("http://localhost:5000"), Timeout = TimeSpan.FromSeconds(10) };
         _contextMenu = new ContextMenuStrip();
 
         var openMenuItem = new ToolStripMenuItem("Open Dashboard", null, OpenDashboard);
@@ -39,13 +47,15 @@ public class NotifierApplicationContext : ApplicationContext
             Icon = SystemIcons.Application,
             ContextMenuStrip = _contextMenu,
             Visible = true,
-            Text = "FocusMed Server"
+            Text = "FocusMed - Starting..."
         };
         _notifyIcon.DoubleClick += OpenDashboard;
 
         _timer = new System.Windows.Forms.Timer { Interval = 2000 };
         _timer.Tick += async (s, e) => await PollPendingDocuments();
         _timer.Start();
+
+        Log("Timer started (2s interval), polling for pending documents");
     }
 
     private async Task PollPendingDocuments()
@@ -53,19 +63,31 @@ public class NotifierApplicationContext : ApplicationContext
         try
         {
             var pendingDocs = await _http.GetFromJsonAsync<JsonElement[]>("/api/quickassign/pending");
+            int count = pendingDocs?.Length ?? 0;
+
+            _notifyIcon.Text = count > 0
+                ? $"FocusMed - {count} document(s) to assign"
+                : "FocusMed - No pending documents";
+
             if (pendingDocs != null && pendingDocs.Length > 0)
             {
+                Log($"Found {pendingDocs.Length} pending document(s), shownDocumentIds={_shownDocumentIds.Count}, currentWindow={_currentAssignWindow != null}");
+
                 foreach (var nextDoc in pendingDocs)
                 {
                     var docId = nextDoc.GetProperty("id").GetInt32();
 
-                    // If we haven't shown a window for this document, and no window is currently open
                     if (!_shownDocumentIds.Contains(docId) && _currentAssignWindow == null)
                     {
                         _shownDocumentIds.Add(docId);
-                        
+
+                        Log($"Opening QuickAssignWindow for docId={docId}");
                         _currentAssignWindow = new QuickAssignWindow(docId);
-                        _currentAssignWindow.FormClosed += (s, e) => _currentAssignWindow = null;
+                        _currentAssignWindow.FormClosed += (s, e) =>
+                        {
+                            _currentAssignWindow = null;
+                            Log("QuickAssignWindow closed");
+                        };
                         _currentAssignWindow.Show();
                         _currentAssignWindow.Activate();
                         break;
@@ -73,16 +95,28 @@ public class NotifierApplicationContext : ApplicationContext
                 }
             }
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            // Expected when the server is offline or restarting. Do not log.
+            Log($"HTTP error polling pending docs: {ex.StatusCode} - {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            Log("Poll request timed out");
         }
         catch (Exception ex)
         {
-            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FocusMed", "logs");
-            System.IO.Directory.CreateDirectory(logDir);
-            System.IO.File.AppendAllText(Path.Combine(logDir, "notifier_error.log"), $"Poll Error: {ex}\n");
+            Log($"Unexpected error polling: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}";
+            File.AppendAllText(_logFile, line);
+        }
+        catch { /* Logging should never crash the app */ }
     }
 
     private void OpenDashboard(object? sender, EventArgs e)
@@ -122,6 +156,7 @@ if ($proc) {
 
     private void Exit(object? sender, EventArgs e)
     {
+        Log("Notifier exiting");
         _notifyIcon.Visible = false;
         _timer.Stop();
         Application.Exit();

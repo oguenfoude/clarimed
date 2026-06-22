@@ -15,10 +15,8 @@ public class SettingsModel : PageModel
     public ClinicSettings? Settings { get; set; }
     public string Lang { get; set; } = "en";
     public string ActiveSection { get; set; } = "general";
-    public IReadOnlyList<User>? Users { get; set; }
     public List<string> LocalIpAddresses { get; set; } = new();
     public List<string> InstalledPrinters { get; set; } = new();
-    public bool IsAdmin => User.IsInRole("Admin");
 
     public SettingsModel(IServiceScopeFactory scopeFactory)
         => _scopeFactory = scopeFactory;
@@ -90,11 +88,6 @@ public class SettingsModel : PageModel
             }
         }
 
-        if (ActiveSection == "users" && IsAdmin)
-        {
-            var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-            Users = await userRepo.GetAllAsync();
-        }
     }
 
     // ── General (Language) ──
@@ -143,102 +136,6 @@ public class SettingsModel : PageModel
         return Content("<span class='text-amber-600 text-sm font-bold'>Settings saved. Server will restart when idle...</span>");
     }
 
-    // ── Add User ──
-    public async Task<IActionResult> OnPostAddUserAsync()
-    {
-        if (!IsAdmin) return Forbid();
-
-        var username = Request.Form["Username"].FirstOrDefault()?.Trim();
-        var displayName = Request.Form["DisplayName"].FirstOrDefault()?.Trim();
-        var password = Request.Form["Password"].FirstOrDefault();
-        var roleStr = Request.Form["Role"].FirstOrDefault() ?? "User";
-
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(displayName))
-            return Content("<span class='text-red-600 text-sm font-medium'>Username, display name, and password are required.</span>");
-
-        if (password.Length < 6)
-            return Content("<span class='text-red-600 text-sm font-medium'>Password must be at least 6 characters.</span>");
-
-        using var scope = _scopeFactory.CreateScope();
-        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-
-        var existing = await userRepo.GetByUsernameAsync(username);
-        if (existing != null)
-            return Content("<span class='text-red-600 text-sm font-medium'>Username already exists.</span>");
-
-        var role = roleStr == "Admin" ? UserRole.Admin : UserRole.User;
-        await userRepo.AddAsync(new User
-        {
-            Username = username,
-            DisplayName = displayName,
-            Role = role,
-            IsActive = true
-        }, password);
-
-        Users = await userRepo.GetAllAsync();
-        return Partial("_UsersTable", Users);
-    }
-
-    // ── Toggle User Active ──
-    public async Task<IActionResult> OnPostToggleUserAsync(int userId)
-    {
-        if (!IsAdmin) return Forbid();
-
-        using var scope = _scopeFactory.CreateScope();
-        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-        var user = await userRepo.GetByIdAsync(userId);
-        if (user == null) return NotFound();
-
-        // Default admin cannot be deactivated by anyone
-        if (user.Username == "admin")
-            return Content("<span class='text-red-600 text-sm font-medium'>Default admin account cannot be modified.</span>");
-
-        user.IsActive = !user.IsActive;
-        await userRepo.UpdateAsync(user);
-
-        Users = await userRepo.GetAllAsync();
-        return Partial("_UsersTable", Users);
-    }
-
-    // ── Delete User ──
-    public async Task<IActionResult> OnPostDeleteUserAsync(int userId)
-    {
-        if (!IsAdmin) return Forbid();
-
-        using var scope = _scopeFactory.CreateScope();
-        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-        var user = await userRepo.GetByIdAsync(userId);
-        if (user == null) return NotFound();
-
-        // Default admin cannot be deleted by anyone
-        if (user.Username == "admin")
-            return Content("<span class='text-red-600 text-sm font-medium'>Default admin account cannot be deleted.</span>");
-
-        await userRepo.DeleteAsync(userId);
-
-        Users = await userRepo.GetAllAsync();
-        return Partial("_UsersTable", Users);
-    }
-
-    // ── Change Password ──
-    public async Task<IActionResult> OnPostChangePasswordAsync(int userId)
-    {
-        if (!IsAdmin) return Forbid();
-
-        var newPassword = Request.Form["NewPassword"].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
-            return Content("<span class='text-red-600 text-sm font-medium'>Password must be at least 6 characters.</span>");
-
-        using var scope = _scopeFactory.CreateScope();
-        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-        var user = await userRepo.GetByIdAsync(userId);
-        if (user == null) return NotFound();
-
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
-        await userRepo.UpdateAsync(user);
-
-        return Content("<span class='text-emerald-600 text-sm font-bold'>Password updated</span>");
-    }
 
     // ── DICOM Status (for polling) ──
     public async Task<IActionResult> OnGetDicomStatusAsync()

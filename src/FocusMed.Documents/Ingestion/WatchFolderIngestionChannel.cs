@@ -41,12 +41,13 @@ public sealed class WatchFolderIngestionChannel : IDocumentIngestionChannel, IDi
 
         _watcher = new FileSystemWatcher(_folderPath, "*.*")
         {
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
             EnableRaisingEvents = true,
             IncludeSubdirectories = false
         };
 
         _watcher.Created += OnFileCreated;
+        _watcher.Changed += OnFileCreated;
         _watcher.Error += OnWatcherError;
 
         // Start a background task that drains the file buffer into the channel
@@ -159,6 +160,8 @@ public sealed class WatchFolderIngestionChannel : IDocumentIngestionChannel, IDi
         {
             try
             {
+                if (!File.Exists(filePath)) return false;
+
                 // Try opening with exclusive read — if it succeeds, the file is ready
                 using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
                 return true;

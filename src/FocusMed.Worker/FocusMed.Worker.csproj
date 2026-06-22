@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FocusMed.Dicom\FocusMed.Dicom.csproj" />
-    <ProjectReference Include="..\FocusMed.Imaging\FocusMed.Imaging.csproj" />
     <ProjectReference Include="..\FocusMed.Printing\FocusMed.Printing.csproj" />
     <ProjectReference Include="..\FocusMed.Data\FocusMed.Data.csproj" />
     <ProjectReference Include="..\FocusMed.Documents\FocusMed.Documents.csproj" />

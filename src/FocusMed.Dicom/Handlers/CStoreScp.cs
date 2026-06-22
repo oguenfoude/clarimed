@@ -1,9 +1,7 @@
 using System.Text;
 using FocusMed.Data;
 using FocusMed.Data.Models;
-using FocusMed.Data.Services;
 using FellowOakDicom;
-using FellowOakDicom.Imaging;
 using FellowOakDicom.Network;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,33 +15,27 @@ namespace FocusMed.Dicom.Handlers;
 ///   1. Saves the raw .dcm file to disk
 ///   2. Extracts DICOM tags and persists Patient → Study → Series → DicomImage
 ///   3. Converts pixel data to PNG
-///   4. Generates a thumbnail
 /// </summary>
 public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvider
 {
     private static readonly DicomTransferSyntax[] AcceptedTransferSyntaxes = new[]
     {
-        // Uncompressed
         DicomTransferSyntax.ExplicitVRLittleEndian,
         DicomTransferSyntax.ExplicitVRBigEndian,
         DicomTransferSyntax.ImplicitVRLittleEndian,
-        // JPEG compressed
-        DicomTransferSyntax.JPEGProcess1,           // JPEG Baseline (Process 1)
-        DicomTransferSyntax.JPEGProcess2_4,         // JPEG Extended (Process 2 & 4)
-        DicomTransferSyntax.JPEGProcess14,          // JPEG Lossless (Process 14)
-        DicomTransferSyntax.JPEGProcess14SV1,       // JPEG Lossless SV1 (Process 14, Selection Value 1)
-        // JPEG 2000
+        DicomTransferSyntax.JPEGProcess1,
+        DicomTransferSyntax.JPEGProcess2_4,
+        DicomTransferSyntax.JPEGProcess14,
+        DicomTransferSyntax.JPEGProcess14SV1,
         DicomTransferSyntax.JPEG2000Lossless,
         DicomTransferSyntax.JPEG2000Lossy,
-        // RLE
         DicomTransferSyntax.RLELossless,
     };
 
     private readonly IServiceProvider _rootProvider;
     private readonly ILogger<CStoreScp> _logger;
-    private readonly string _basePath;
+    private readonly string _archivePath;
     private readonly string _imagesPath;
-    private static readonly SemaphoreSlim _dbLock = new(1, 1);
 
     public CStoreScp(
         INetworkStream stream,
@@ -56,9 +48,9 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
         _rootProvider = serviceProvider;
         _logger = serviceProvider.GetRequiredService<ILogger<CStoreScp>>();
         var config = serviceProvider.GetRequiredService<IConfiguration>();
-        _basePath = config["FocusMed:ArchivePath"] ?? "data/archive";
-        _basePath = Path.GetFullPath(_basePath);
-        var rootDataPath = Path.GetDirectoryName(_basePath) ?? "data";
+        _archivePath = config["FocusMed:ArchivePath"] ?? "data/archive";
+        _archivePath = Path.GetFullPath(_archivePath);
+        var rootDataPath = Path.GetDirectoryName(_archivePath) ?? "data";
         _imagesPath = config["FocusMed:ImagesPath"] ?? Path.Combine(rootDataPath, "images");
     }
 
@@ -68,7 +60,6 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
         {
             pc.AcceptTransferSyntaxes(AcceptedTransferSyntaxes);
         }
-
         return SendAssociationAcceptAsync(association);
     }
 
@@ -94,225 +85,65 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
     {
         try
         {
-            // Create a new scope for database operations
             using var scope = _rootProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<FocusMedDbContext>();
 
             var dataset = request.Dataset;
+            var tags = Services.DicomUpsertService.ExtractTags(dataset);
 
-            // ── Extract DICOM tags Safely ──
-            var patientIdTag = dataset.GetSingleValueOrDefault(DicomTag.PatientID, string.Empty);
-            if (string.IsNullOrWhiteSpace(patientIdTag))
-            {
-                patientIdTag = $"UNKNOWN-{Guid.NewGuid().ToString("N").Substring(0, 8)}";
-            }
-
-            var rawPatientName = dataset.GetSingleValueOrDefault(DicomTag.PatientName, "Unknown");
-            // DICOM names are separated by '^'. Replace with spaces for display.
-            var patientName = rawPatientName.Replace("^", " ").Replace("  ", " ").Trim();
-            if (string.IsNullOrWhiteSpace(patientName)) patientName = "Unknown";
-
-            var patientSex = dataset.GetSingleValueOrDefault(DicomTag.PatientSex, "");
-            var birthDateStr = dataset.GetSingleValueOrDefault(DicomTag.PatientBirthDate, "");
-
-            var studyUid = dataset.GetSingleValueOrDefault(DicomTag.StudyInstanceUID, Guid.NewGuid().ToString());
-            var seriesUid = dataset.GetSingleValueOrDefault(DicomTag.SeriesInstanceUID, Guid.NewGuid().ToString());
-            var sopUid = dataset.GetSingleValueOrDefault(DicomTag.SOPInstanceUID, Guid.NewGuid().ToString());
-            var accession = dataset.GetSingleValueOrDefault(DicomTag.AccessionNumber, "");
-            var studyDesc = dataset.GetSingleValueOrDefault(DicomTag.StudyDescription, "");
-            var seriesDesc = dataset.GetSingleValueOrDefault(DicomTag.SeriesDescription, "");
-            var modality = dataset.GetSingleValueOrDefault(DicomTag.Modality, "OT");
-            var studyDateStr = dataset.GetSingleValueOrDefault(DicomTag.StudyDate, "");
-            var referringPhysician = dataset.GetSingleValueOrDefault(DicomTag.ReferringPhysicianName, "").Replace("^", " ").Trim();
-            var institution = dataset.GetSingleValueOrDefault(DicomTag.InstitutionName, "");
-            var manufacturer = dataset.GetSingleValueOrDefault(DicomTag.Manufacturer, "");
-            var stationName = dataset.GetSingleValueOrDefault(DicomTag.StationName, "");
-
-            int? instanceNumber = dataset.TryGetSingleValue<int>(DicomTag.InstanceNumber, out var iNum) ? iNum : null;
-            int? seriesNumber = dataset.TryGetSingleValue<int>(DicomTag.SeriesNumber, out var sNum) ? sNum : null;
-            int? rows = dataset.TryGetSingleValue<int>(DicomTag.Rows, out var rNum) ? rNum : null;
-            int? columns = dataset.TryGetSingleValue<int>(DicomTag.Columns, out var cNum) ? cNum : null;
-            int frameCount = dataset.TryGetSingleValue<int>(DicomTag.NumberOfFrames, out var fNum) ? fNum : 1;
-
-            DateTime? studyDate = null;
-            if (DateTime.TryParseExact(studyDateStr, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var parsed))
-                studyDate = parsed;
-
-            DateTime? birthDate = null;
-            if (DateTime.TryParseExact(birthDateStr, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var bParsed))
-                birthDate = bParsed;
-
-            Patient? patient;
-            Study? study;
-            Data.Models.Series? series;
-
-            await _dbLock.WaitAsync();
+            var studyLock = Services.DicomUpsertService.GetStudyLock(tags.StudyUid);
+            await studyLock.WaitAsync();
             try
             {
-                // ── Upsert Patient ──
-                patient = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == patientIdTag);
-                if (patient == null)
+                // Batched upsert: single SaveChangesAsync for Patient + Study + Series
+                var (patient, study, series) = await Services.DicomUpsertService.UpsertEntitiesAsync(db, tags);
+
+                // Check duplicate inside the lock
+                if (Services.DicomUpsertService.IsDuplicate(db, tags.SopUid))
                 {
-                    patient = new Patient
-                    {
-                        PatientId = patientIdTag,
-                        Name = patientName,
-                        Sex = patientSex,
-                        BirthDate = birthDate
-                    };
-                    db.Patients.Add(patient);
-                    await db.SaveChangesAsync();
-                }
-                else
-                {
-                    // Update Unknown names if a better one is found
-                    if (patient.Name == "Unknown" && patientName != "Unknown")
-                    {
-                        patient.Name = patientName;
-                        await db.SaveChangesAsync();
-                    }
+                    _logger.LogInformation("Duplicate SOP Instance UID {SopUid} — already stored, skipping.", tags.SopUid);
+                    return new DicomCStoreResponse(request, DicomStatus.Success);
                 }
 
-                // ── Upsert Study ──
-                study = await db.Studies.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.StudyInstanceUid == studyUid);
-                if (study == null)
-                {
-                    study = new Study
-                    {
-                        StudyInstanceUid = studyUid,
-                        PatientId = patient.Id,
-                        AccessionNumber = accession,
-                        StudyDescription = studyDesc,
-                        Modality = modality,
-                        StudyDate = studyDate,
-                        ReferringPhysicianName = referringPhysician,
-                        InstitutionName = institution,
-                        Status = StudyStatus.Receiving,
-                        LastImageReceivedAt = DateTime.UtcNow
-                    };
-                    db.Studies.Add(study);
-                    await db.SaveChangesAsync();
-                }
-                else if (study.IsDeleted)
-                {
-                    // Restore from Recycle Bin
-                    study.IsDeleted = false;
-                    study.DeletedAt = null;
-                    study.Status = StudyStatus.Receiving;
-                    study.LastImageReceivedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync();
-                }
+                // Generate paths
+                var pathParts = Services.DicomUpsertService.GeneratePaths(tags);
 
-                // ── Upsert Series ──
-                series = await db.Series.FirstOrDefaultAsync(s => s.SeriesInstanceUid == seriesUid);
-                if (series == null)
-                {
-                    series = new Data.Models.Series
-                    {
-                        SeriesInstanceUid = seriesUid,
-                        StudyId = study.Id,
-                        SeriesNumber = seriesNumber,
-                        Modality = modality,
-                        SeriesDescription = seriesDesc,
-                        Manufacturer = manufacturer,
-                        StationName = stationName
-                    };
-                    db.Series.Add(series);
-                    await db.SaveChangesAsync();
-                }
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
+                // Save .dcm file
+                var dcmPath = Path.Combine(_archivePath, pathParts[0], pathParts[1], pathParts[2], $"{pathParts[3]}.dcm");
+                var dir = Path.GetDirectoryName(dcmPath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                await request.File.SaveAsync(dcmPath);
 
-            // ── Check for duplicate SOP Instance ──
-            var existingImage = await db.Images.AnyAsync(i => i.SopInstanceUid == sopUid);
-            if (existingImage)
-            {
-                _logger.LogInformation("Duplicate SOP Instance UID {SopUid} — already stored, skipping.", sopUid);
-                return new DicomCStoreResponse(request, DicomStatus.Success);
-            }
+                // Convert to PNG
+                var pngPaths = Services.DicomUpsertService.ConvertToPng(dataset, "", tags.Rows, tags.Columns, _imagesPath, pathParts, _logger);
 
-            // ── Generate Human-Readable & Safe File Paths ──
-            var safePatient = $"{Sanitize(patientName)}_{Sanitize(patientIdTag)}";
-            var safeStudy = $"{studyDate?.ToString("yyyy-MM-dd") ?? "NoDate"}_{Sanitize(modality)}_{Math.Abs(GetStableHashCode(studyUid)):X4}";
-            var safeSeries = $"Series_{seriesNumber?.ToString() ?? "0"}";
-            var timestamp = DateTime.Now.ToString("HHmm");
-            var safeInstance = $"IMG_{instanceNumber?.ToString() ?? "0"}-{timestamp}";
-
-            // ── Save .dcm file to disk (Archive) ──
-            var storageDir = Path.Combine(_basePath, safePatient, safeStudy, safeSeries);
-            Directory.CreateDirectory(storageDir);
-            var dcmPath = Path.Combine(storageDir, $"{safeInstance}.dcm");
-            await request.File.SaveAsync(dcmPath);
-
-            // ── Convert pixel data to PNG (Cache) ──
-            string? pngPath = null;
-
-            if (rows.HasValue && columns.HasValue)
-            {
-                try
-                {
-                    var imageDir = Path.Combine(_imagesPath, safePatient, safeStudy, safeSeries);
-                    Directory.CreateDirectory(imageDir);
-                    pngPath = Path.Combine(imageDir, $"{safeInstance}.png");
-
-                    // Use fo-dicom native image rendering
-                    // This automatically handles JPEG decompression, 16-bit windowing, and photometric interpretation
-                    var foDicomImage = new FellowOakDicom.Imaging.DicomImage(dataset);
-                    // Update frameCount if fo-dicom finds more
-                    frameCount = foDicomImage.NumberOfFrames;
-                    
-                    for (int i = 0; i < frameCount; i++)
-                    {
-                        var framePath = frameCount > 1 
-                            ? pngPath.Replace(".png", $"_f{i}.png")
-                            : pngPath;
-
-                        using var bitmap = foDicomImage.RenderImage(i).As<System.Drawing.Bitmap>();
-                        bitmap.Save(framePath, System.Drawing.Imaging.ImageFormat.Png);
-                    }
-
-                    _logger.LogInformation("Extracted {FrameCount} frames for SOP {SopUid}", frameCount, sopUid);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not convert pixel data for SOP {SopUid}", sopUid);
-                }
-            }
-
-            // ── Save DicomImage record ──
-            await _dbLock.WaitAsync();
-            try
-            {
+                // Save image record + update study count — single SaveChangesAsync
                 var dicomImage = new FocusMed.Data.Models.DicomImage
                 {
-                    SopInstanceUid = sopUid,
+                    SopInstanceUid = tags.SopUid,
                     SeriesId = series.Id,
-                    InstanceNumber = instanceNumber,
+                    InstanceNumber = tags.InstanceNumber,
                     FilePath = dcmPath,
-                    Rows = rows,
-                    Columns = columns,
-                    FrameCount = frameCount
+                    Rows = tags.Rows,
+                    Columns = tags.Columns,
+                    FrameCount = tags.FrameCount
                 };
                 db.Images.Add(dicomImage);
-                await db.SaveChangesAsync();
 
-                // ── Update study receiving state ──
                 study.LastImageReceivedAt = DateTime.UtcNow;
                 study.ImageCount = await db.Images
                     .CountAsync(i => db.Series.Where(s => s.StudyId == study.Id)
                     .Select(s => s.Id).Contains(i.SeriesId));
                 study.Status = StudyStatus.Receiving;
+
                 await db.SaveChangesAsync();
+
+                _logger.LogInformation("Image received: {PatientName} / {Modality} / {SopUid}", tags.PatientName, tags.Modality, tags.SopUid);
             }
             finally
             {
-                _dbLock.Release();
+                studyLock.Release();
             }
-
-            _logger.LogInformation("Image received: {PatientName} / {Modality} / {SopUid}", patientName, modality, sopUid);
 
             return new DicomCStoreResponse(request, DicomStatus.Success);
         }
@@ -327,26 +158,5 @@ public class CStoreScp : DicomService, IDicomServiceProvider, IDicomCStoreProvid
     {
         _logger.LogError(e, "C-STORE exception for temp file: {TempFile}", tempFileName);
         return Task.CompletedTask;
-    }
-
-    private static int GetStableHashCode(string str)
-    {
-        unchecked
-        {
-            int hash = (int)2166136261;
-            foreach (char c in str)
-            {
-                hash = (hash ^ c) * 16777619;
-            }
-            return hash;
-        }
-    }
-
-    private string Sanitize(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return "Unknown";
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var sanitized = new string(input.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray());
-        return sanitized.Trim();
     }
 }

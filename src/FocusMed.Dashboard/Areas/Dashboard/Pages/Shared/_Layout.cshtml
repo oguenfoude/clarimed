@@ -135,24 +135,7 @@
                     @DateTime.Now.ToString("dd MMM yyyy HH:mm")
                 </div>
 
-                <!-- User Menu -->
-                @if (User.Identity?.IsAuthenticated == true)
-                {
-                    <div class="flex items-center gap-3 pl-4 border-l border-slate-200">
-                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md">
-                            @(User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value?.Substring(0, 1).ToUpper() ?? "U")
-                        </div>
-                        <div class="hidden sm:block">
-                            <p class="text-sm font-semibold text-slate-700 leading-tight">@(User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? User.Identity?.Name)</p>
-                            <p class="text-[10px] text-slate-400 font-medium">@(User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "User")</p>
-                        </div>
-                        <a href="/login?handler=logout" class="ml-1 p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors" title="Sign out">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                        </a>
-                    </div>
-                }
+                <!-- Removed User Menu -->
             </div>
         </header>
 

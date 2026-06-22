@@ -40,9 +40,8 @@ Each layer has a `ServiceCollectionExtensions.cs` registering DI. Entry point is
 
 ```
 FocusMed.Data         → EF Core 8 + SQLite (WAL mode), repository pattern (scoped)
-FocusMed.Dicom        → fo-dicom C-STORE SCP on TCP:1004
+FocusMed.Dicom        → fo-dicom C-STORE SCP on TCP:1004 + DicomUpsertService
 FocusMed.Documents    → .docx watch folder → FreeSpire PDF conversion (producer-consumer via Channels)
-FocusMed.Imaging      → DICOM pixel → PNG
 FocusMed.Printing     → QuestPDF (cover) + PdfSharpCore (grid layout + A3/booklet imposition) + PdfiumViewer (silent print)
 FocusMed.Dashboard    → Razor Pages (Areas pattern) + HTMX + Tailwind + Alpine.js
 FocusMed.Worker       → Windows Service host, orchestrates all background services
@@ -54,9 +53,9 @@ FocusMed.Installer    → Self-extracting installer (NOT in solution file, requi
 ### Project Reference Graph
 
 ```
-Worker → Dicom, Imaging, Printing, Data, Documents, Dashboard
+Worker → Dicom, Printing, Data, Documents, Dashboard
 Dashboard → Data, Printing
-Dicom → Data, Imaging, Printing
+Dicom → Data, Printing
 Documents → Data
 Notifier → Data
 ```
@@ -92,6 +91,11 @@ Data paths are resolved relative to `C:\ProgramData\FocusMed` (via `GetSafeDataP
 - **Print profiles** — Paper size, tray, and booklet finishing are controlled by Windows printer queue defaults, not by application code. The app only selects the printer by name.
 - **Image path resolution** — `DicomImage.FilePath` stores the absolute `.dcm` path. To get `.png` path: replace `archive` → `images` and `.dcm` → `.png`. The `GetRelative()` helper in Preview.cshtml strips to a relative path for the frontend.
 - **PdfSharpMerger grid layout** — Images are laid out in a grid on A4 pages (imagesPerPage × columnsPerRow with gap), then format-transformed. A4 = as-is, A3 = scaled to A3 portrait, Booklet = A4 pairs side-by-side on A3 landscape sheets.
+- **PDF margin = 2 × gapPx** — Preview has double padding (outer div `padding: gap` + inner grid `padding: gap`), so PDF uses `margin = 2 * gap` to match exactly.
+- **Per-study DICOM locking** — `ConcurrentDictionary<string, SemaphoreSlim>` allows parallel ingestion of different studies while serializing images within the same study. Don't revert to a global lock.
+- **ClinicSettings caching** — `ClinicSettingsRepository` caches settings for 30 seconds with invalidation on `UpdateAsync()`. This eliminates a DB hit on every HTTP request.
+- **No sync-over-async** — `LocalizationService` reads language from `HttpContext.Items["CurrentLanguage"]` (set by middleware). Never use `.GetAwaiter().GetResult()` in scoped services.
+- **Read-only queries** — All read-only queries use `AsNoTracking()`. Only write operations use tracked entities.
 
 ## i18n
 
@@ -105,5 +109,6 @@ No test framework configured. `tests/` directory is a placeholder. `DicomSender`
 
 - No analyzers, no formatter, no `.editorconfig`
 - Razor Pages use Areas pattern: `Areas/Dashboard/Pages/`
+- Each page lives in its own subfolder with `Index.cshtml`/`Index.cshtml.cs`. Only `_Layout.cshtml` stays in `Shared/`
 - Settings page is HTMX-driven with partial views (`_SettingsGeneral.cshtml`, etc.)
 - All dashboard pages require `[Authorize]` (set globally in `_ViewImports.cshtml`)
